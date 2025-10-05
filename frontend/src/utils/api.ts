@@ -62,24 +62,14 @@ export const getBaseUrl = async (): Promise<string> => {
       resolvedUrl = `${resolvedUrl}/api`;
     }
     console.log('[getBaseUrl] Resolved URL:', resolvedUrl);
-    
-    // Production safety check - ensure we're using Render backend
-    if (import.meta.env.PROD && !resolvedUrl.includes('wellspring-backend.onrender.com')) {
-      console.error('[getBaseUrl] CRITICAL: Production environment not using Render backend!');
-      console.error('[getBaseUrl] Expected: https://wellspring-backend.onrender.com/api');
-      console.error('[getBaseUrl] Got:', resolvedUrl);
-      throw new Error('Production environment must use Render backend URL');
-    }
-    
     return resolvedUrl;
   }
   
-  // In production, require explicit environment variable and strict validation
+  // Production fallback - use Render backend if no environment variable is set
   if (import.meta.env.PROD) {
-    console.error('[getBaseUrl] CRITICAL: Missing VITE_API_BASE_URL in production!');
-    console.error('[getBaseUrl] Production environment detected - no localhost fallback allowed');
-    console.error('[getBaseUrl] Please set VITE_API_BASE_URL=https://wellspring-backend.onrender.com in Netlify environment variables');
-    throw new Error('VITE_API_BASE_URL environment variable is required in production');
+    const prodUrl = 'https://wellspring-backend.onrender.com/api';
+    console.log('[getBaseUrl] Production mode - using Render backend:', prodUrl);
+    return prodUrl;
   }
   
   // Development fallback only

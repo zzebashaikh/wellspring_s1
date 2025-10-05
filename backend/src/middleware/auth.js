@@ -48,24 +48,13 @@ export const authenticateToken = async (req, res, next) => {
         uid: decodedToken.uid,
         email: decodedToken.email,
         role: 'receptionist',
+        permissions: ['read:patients', 'write:patients', 'allocate:resources'],
       };
       
+      console.log(`✅ Firebase token verified for user: ${decodedToken.email}`);
       next();
     } catch (firebaseError) {
       console.error('Firebase token verification failed:', firebaseError);
-      
-      // Fallback: If Firebase Admin verification fails, allow known receptionist emails
-      // This is a temporary solution for production deployment issues
-      if (token && token.length > 50 && token.includes('.')) {
-        console.log('⚠️ Firebase Admin verification failed, allowing token as fallback for production');
-        req.user = {
-          uid: 'fallback-user',
-          email: 'receptionist@wellspring.com',
-          role: 'receptionist',
-          permissions: ['read:patients', 'write:patients', 'allocate:resources'],
-        };
-        return next();
-      }
       
       return res.status(403).json({ 
         success: false,

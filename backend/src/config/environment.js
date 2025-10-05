@@ -17,6 +17,8 @@ export const config = {
         'http://127.0.0.1:5173',
         'http://127.0.0.1:8081',
         'http://localhost:8083',   // Additional dev port
-        'https://wellspringhospital.netlify.app'  // Production frontend
+        'https://wellspringhospital.netlify.app',  // Production frontend
+        'https://wellspring-hospital.netlify.app', // Alternative production domain
+        'https://wellspring.netlify.app' // Another possible domain
       ],
 };

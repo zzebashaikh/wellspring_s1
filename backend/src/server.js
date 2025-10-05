@@ -46,8 +46,10 @@ const corsOptions = {
       return callback(null, true);
     }
     
-    // Allow Netlify domains
-    if (/^https:\/\/.*\.netlify\.app$/.test(origin)) {
+    // Allow Netlify domains (including custom domains)
+    if (/^https:\/\/.*\.netlify\.app$/.test(origin) || 
+        /^https:\/\/.*\.netlify\.com$/.test(origin) ||
+        origin.includes('netlify')) {
       return callback(null, true);
     }
     
