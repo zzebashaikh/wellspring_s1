@@ -14,6 +14,7 @@ interface PatientQueueProps {
 
 const PatientQueue = ({ patients, onAllocate, resources }: PatientQueueProps) => {
   const [selectedResource, setSelectedResource] = useState<{ [key: string]: keyof Resources }>({});
+  const [allocationPending, setAllocationPending] = useState<{ [key: string]: boolean }>({});
 
   // Filter to only show patients with "Waiting" status and sort by priority (highest severity first)
   const waitingPatients = patients
@@ -66,7 +67,7 @@ const PatientQueue = ({ patients, onAllocate, resources }: PatientQueueProps) =>
 
             <div className="flex gap-3 pt-4 border-t border-border">
               <Select
-                value={selectedResource[patient.id]}
+                value={selectedResource[patient.id] || ""}
                 onValueChange={(value) =>
                   setSelectedResource((prev) => ({ ...prev, [patient.id]: value as keyof Resources }))
                 }
@@ -83,15 +84,23 @@ const PatientQueue = ({ patients, onAllocate, resources }: PatientQueueProps) =>
                 </SelectContent>
               </Select>
               <Button
-                onClick={() => {
-                  if (selectedResource[patient.id]) {
-                    onAllocate(patient.id, selectedResource[patient.id]);
+                onClick={async () => {
+                  if (selectedResource[patient.id] && !allocationPending[patient.id]) {
+                    setAllocationPending(prev => ({ ...prev, [patient.id]: true }));
+                    try {
+                      await onAllocate(patient.id, selectedResource[patient.id]);
+                      setSelectedResource(prev => ({ ...prev, [patient.id]: undefined }));
+                    } catch (error) {
+                      console.error('Allocation failed:', error);
+                    } finally {
+                      setAllocationPending(prev => ({ ...prev, [patient.id]: false }));
+                    }
                   }
                 }}
-                disabled={!selectedResource[patient.id]}
+                disabled={!selectedResource[patient.id] || allocationPending[patient.id]}
                 className="rounded-xl"
               >
-                Allocate
+                {allocationPending[patient.id] ? "Allocating..." : "Allocate"}
               </Button>
             </div>
           </Card>

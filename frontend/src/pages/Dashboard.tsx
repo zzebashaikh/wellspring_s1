@@ -230,29 +230,41 @@ const Dashboard = () => {
   };
 
   // Allocate resource to a patient
-  const allocateResource = async (patientId: string, resourceType: keyof Resources) => {
-    try {
-      const resource = resources[resourceType];
-      
-      // Handle different resource types
-      if (resourceType === 'beds' || resourceType === 'icus') {
-        const bedResource = resource as Resource & { available: number };
-        if (bedResource.available <= 0) {
-          toast.error(`No ${resourceType} available`);
-          return;
-        }
-      } else if ('available' in resource && typeof resource.available === 'number') {
-        if (resource.available <= 0) {
-          toast.error(`No ${resourceType} available`);
-          return;
-        }
+  const allocateResource = async (patientId: string, resourceType: keyof Resources): Promise<void> => {
+    const resource = resources[resourceType];
+    
+    // Handle different resource types
+    if (resourceType === 'beds' || resourceType === 'icus') {
+      const bedResource = resource as Resource & { available: number };
+      if (bedResource.available <= 0) {
+        const error = new Error(`No ${resourceType} available`);
+        toast.error(error.message);
+        throw error;
       }
+    } else if ('available' in resource && typeof resource.available === 'number') {
+      if (resource.available <= 0) {
+        const error = new Error(`No ${resourceType} available`);
+        toast.error(error.message);
+        throw error;
+      }
+    }
 
-      // Allocate resource via API
-      await Promise.all([
-        patientsAPI.allocateResource(patientId, resourceType.toString()),
-        resourcesAPI.allocate(resourceType.toString())
+    console.log(`[allocateResource] Starting allocation for patient ${patientId}, resource ${resourceType}`);
+    
+    try {
+      // Allocate resource via API with proper error handling
+      const [patientResult, resourceResult] = await Promise.all([
+        patientsAPI.allocateResource(patientId, resourceType.toString()).catch(err => {
+          console.error(`[allocateResource] Patient allocation failed:`, err);
+          throw new Error(`Patient allocation failed: ${err.message || 'Unknown error'}`);
+        }),
+        resourcesAPI.allocate(resourceType.toString()).catch(err => {
+          console.error(`[allocateResource] Resource allocation failed:`, err);
+          throw new Error(`Resource allocation failed: ${err.message || 'Unknown error'}`);
+        })
       ]);
+
+      console.log(`[allocateResource] Allocation successful:`, { patientResult, resourceResult });
 
       // Update local state
       setResources(prev => ({
@@ -277,7 +289,10 @@ const Dashboard = () => {
         toast.success(`${resourceType} allocated to ${patient.name}`);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to allocate resource");
+      console.error(`[allocateResource] Allocation failed for patient ${patientId}:`, error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to allocate resource";
+      toast.error(errorMessage);
+      throw error; // Re-throw so PatientQueue can handle the error state
     }
   };
 
@@ -340,7 +355,7 @@ const Dashboard = () => {
 
     console.log('Dispatching ambulance for:', patientData);
 
-    // Fire-and-forget async operation
+    // Fire-and-forget async operation with proper error handling and logging
     (async () => {
       try {
         const dispatchData = {
@@ -351,13 +366,30 @@ const Dashboard = () => {
           pickupAddress: patientData.pickupAddress,
         };
 
-        console.log('Sending dispatch data:', dispatchData);
+        console.log('[dispatchAmbulance] Sending dispatch data:', dispatchData);
         const dispatch = await ambulanceAPI.createDispatch(dispatchData);
-        console.log('Dispatch created successfully:', dispatch);
+        console.log('[dispatchAmbulance] Dispatch created successfully:', dispatch);
         toast.success(`Ambulance ${dispatch.assignedAmbulanceID} dispatched for ${patientData.name} at ${patientData.pickupAddress}`);
+        
+        // Trigger a refresh of dispatches list to ensure visibility
+        // The real-time listener should handle this, but we'll add a small delay to ensure it's processed
+        setTimeout(() => {
+          console.log('[dispatchAmbulance] Dispatch should now be visible in Recent Dispatches');
+        }, 1000);
+        
       } catch (error) {
-        console.error('Failed to dispatch ambulance:', error);
-        toast.error(error instanceof Error ? error.message : "Failed to dispatch ambulance");
+        console.error('[dispatchAmbulance] Failed to dispatch ambulance:', error);
+        const errorMessage = error instanceof Error ? error.message : "Failed to dispatch ambulance";
+        toast.error(errorMessage);
+        
+        // Log additional context for debugging
+        console.error('[dispatchAmbulance] Error context:', {
+          patientData,
+          error: error instanceof Error ? {
+            message: error.message,
+            stack: error.stack
+          } : error
+        });
       }
     })();
 

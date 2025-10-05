@@ -36,13 +36,27 @@ const AmbulanceHistory = ({ refreshTrigger }: AmbulanceHistoryProps) => {
     
     // Start real-time subscription for live updates
     const unsubscribe = subscribeAmbulanceDispatches(20, (live) => {
+      console.log('[AmbulanceHistory] Real-time update received:', live.length, 'dispatches');
       if (live.length > 0) {
         setDispatches(live);
         setIsLoading(false);
+      } else {
+        // If real-time returns empty but we expect data, fallback to API call
+        console.log('[AmbulanceHistory] Real-time returned empty, checking API fallback');
+        loadDispatches();
       }
     });
     
-    return () => unsubscribe();
+    // Add periodic refresh as additional safety net (every 30 seconds)
+    const refreshInterval = setInterval(() => {
+      console.log('[AmbulanceHistory] Periodic refresh triggered');
+      loadDispatches();
+    }, 30000);
+    
+    return () => {
+      unsubscribe();
+      clearInterval(refreshInterval);
+    };
   }, [refreshTrigger]);
 
   const markReachedHospital = async (dispatchId: string) => {
