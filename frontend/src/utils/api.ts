@@ -46,17 +46,32 @@ export interface Resource {
 // Resolve backend base URL. Prefer env; secure fallback for production.
 export const getBaseUrl = async (): Promise<string> => {
   const explicit = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL;
+  
+  console.log('[getBaseUrl] Environment check:', {
+    VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+    VITE_BACKEND_URL: import.meta.env.VITE_BACKEND_URL,
+    VITE_API_URL: import.meta.env.VITE_API_URL,
+    PROD: import.meta.env.PROD,
+    MODE: import.meta.env.MODE
+  });
+  
   if (explicit) {
-    return `${explicit.replace(/\/$/, '')}/api`;
+    const resolvedUrl = `${explicit.replace(/\/$/, '')}/api`;
+    console.log('[getBaseUrl] Resolved URL:', resolvedUrl);
+    return resolvedUrl;
   }
   
-  // In production, require explicit environment variable
+  // In production, require explicit environment variable and strict validation
   if (import.meta.env.PROD) {
+    console.error('[getBaseUrl] CRITICAL: Missing VITE_API_BASE_URL in production!');
+    console.error('[getBaseUrl] Production environment detected - no localhost fallback allowed');
     throw new Error('VITE_API_BASE_URL environment variable is required in production');
   }
   
   // Development fallback only
-  return 'http://localhost:3001/api';
+  const devUrl = 'http://localhost:3001/api';
+  console.log('[getBaseUrl] Using development fallback:', devUrl);
+  return devUrl;
 };
 
 // Simple console smoke test to verify token handling and API stability

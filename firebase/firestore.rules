@@ -16,6 +16,16 @@ service cloud.firestore {
       allow read, write: if isAuthed();
     }
 
+    // Ambulance dispatches collection (for real-time listeners)
+    match /ambulanceDispatches/{docId} {
+      allow read, write: if isAuthed();
+    }
+
+    // Ambulance availability collection (for real-time listeners)
+    match /ambulanceAvailability/{docId} {
+      allow read, write: if isAuthed();
+    }
+
     // Ambulance resource pool
     match /ambulanceResources/{resourceId} {
       allow read, write: if isAuthed();

@@ -79,13 +79,17 @@ const Dashboard = () => {
         }
         
         // Test specific endpoints as requested
-        console.log('📡 Testing /api/ambulance/dispatches?limit=1...');
+        console.log('📡 Testing ambulance dispatches endpoint...');
         const testDispatches = await ambulanceAPI.getDispatches(1);
         console.log('✅ Ambulance Dispatches Test:', testDispatches);
         
-        console.log('📡 Testing /api/resources/doctors/list...');
+        console.log('📡 Testing doctors list endpoint...');
         const testDoctors = await resourcesAPI.getDoctors();
         console.log('✅ Doctors List Test:', testDoctors);
+        
+        console.log('📡 Testing resources endpoint...');
+        const testResources = await resourcesAPI.getAll();
+        console.log('✅ Resources Test:', testResources);
         
         // Additional connection verification
         console.log('🔍 Verifying no localhost or relative URLs are being used...');
@@ -97,6 +101,8 @@ const Dashboard = () => {
         
         if (hasLocalhost && import.meta.env.PROD) {
           console.error('🚨 CRITICAL: Found localhost URLs in production environment!');
+          console.error('🚨 This is a security risk - production should never use localhost');
+          throw new Error('Localhost URLs detected in production environment');
         } else {
           console.log('✅ No localhost URLs detected in production environment');
         }
@@ -289,13 +295,17 @@ const Dashboard = () => {
       }
       
       // Test the specific endpoint you requested
-      console.log('📡 Testing /api/ambulance/dispatches?limit=1...');
+      console.log('📡 Testing ambulance dispatches endpoint...');
       const testDispatches = await ambulanceAPI.getDispatches(1);
       console.log('✅ Manual Test - Ambulance Dispatches (limit=1):', testDispatches);
       
-      console.log('📡 Testing /api/resources/doctors/list...');
+      console.log('📡 Testing doctors list endpoint...');
       const testDoctors = await resourcesAPI.getDoctors();
       console.log('✅ Manual Test - Doctors List:', testDoctors);
+      
+      console.log('📡 Testing resources endpoint...');
+      const testResources = await resourcesAPI.getAll();
+      console.log('✅ Manual Test - Resources:', testResources);
       
       toast.success('API connection test completed! Check console for details.');
     } catch (error) {

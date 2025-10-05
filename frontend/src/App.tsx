@@ -11,22 +11,57 @@ const queryClient = new QueryClient();
 
 const App = () => {
   useEffect(() => {
-    // Auto-log all outgoing requests to Render backend on page load
+    // Comprehensive request interception and logging for Render backend
+    console.log('🔧 Setting up request interception for Render backend...');
+    
+    // Log existing requests on page load
     window.addEventListener("load", () => {
-      performance.getEntriesByType("resource")
-        .filter(r => r.name.includes("wellspring-backend.onrender.com"))
-        .forEach(r => console.log("Backend request:", r.name));
+      const backendRequests = performance.getEntriesByType("resource")
+        .filter(r => r.name.includes("wellspring-backend.onrender.com"));
+      
+      if (backendRequests.length > 0) {
+        console.log('📡 Found existing backend requests:', backendRequests.map(r => r.name));
+      } else {
+        console.log('ℹ️ No existing backend requests found on page load');
+      }
     });
 
-    // Also log any future requests to Render backend
+    // Intercept all future requests to Render backend
     const originalFetch = window.fetch;
     window.fetch = function(...args) {
       const url = args[0]?.toString() || '';
+      const options = args[1] || {};
+      
       if (url.includes('wellspring-backend.onrender.com')) {
-        console.log('Backend API call:', url);
+        console.log('🌐 Backend API call intercepted:', {
+          url,
+          method: options.method || 'GET',
+          timestamp: new Date().toISOString()
+        });
+        
+        // Log response when it comes back
+        return originalFetch.apply(this, args).then(response => {
+          console.log('📥 Backend API response:', {
+            url,
+            status: response.status,
+            statusText: response.statusText,
+            timestamp: new Date().toISOString()
+          });
+          return response;
+        }).catch(error => {
+          console.error('❌ Backend API error:', {
+            url,
+            error: error.message,
+            timestamp: new Date().toISOString()
+          });
+          throw error;
+        });
       }
+      
       return originalFetch.apply(this, args);
     };
+    
+    console.log('✅ Request interception setup complete');
   }, []);
 
   return (
