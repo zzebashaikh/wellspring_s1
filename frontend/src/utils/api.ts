@@ -133,7 +133,24 @@ const getValidIdToken = async (forceRefresh: boolean = false): Promise<string | 
   try {
     const user = auth.currentUser;
     if (!user) {
-      console.warn("auth.currentUser is null. User might be signed out or anonymous.");
+      console.warn("auth.currentUser is null. Attempting to restore authentication...");
+      
+      // Try to restore authentication from localStorage
+      const isAuthenticated = localStorage.getItem("isAuthenticated");
+      const authToken = localStorage.getItem("authToken");
+      
+      if (isAuthenticated && authToken && authToken !== "anonymous" && authToken !== "fallback") {
+        console.log("Found stored auth token, attempting to use it");
+        return authToken;
+      }
+      
+      // If we have a demo token, use it
+      if (authToken && authToken.startsWith("demo-token")) {
+        console.log("Using demo token for authentication");
+        return authToken;
+      }
+      
+      console.warn("No valid authentication found, returning null");
       return null;
     }
     
@@ -149,6 +166,14 @@ const getValidIdToken = async (forceRefresh: boolean = false): Promise<string | 
     return token;
   } catch (err) {
     console.error("Failed to get Firebase ID token:", err);
+    
+    // Fallback to localStorage token if Firebase fails
+    const authToken = localStorage.getItem("authToken");
+    if (authToken && authToken !== "anonymous" && authToken !== "fallback") {
+      console.log("Firebase token failed, falling back to stored token");
+      return authToken;
+    }
+    
     return null;
   }
 };
