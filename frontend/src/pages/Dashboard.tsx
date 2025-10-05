@@ -91,6 +91,15 @@ const Dashboard = () => {
         const testResources = await resourcesAPI.getAll();
         console.log('✅ Resources Test:', testResources);
         
+        // Additional endpoint tests for comprehensive coverage
+        console.log('📡 Testing ambulance availability endpoint...');
+        const testAvailability = await ambulanceAPI.getAvailability();
+        console.log('✅ Ambulance Availability Test:', testAvailability);
+        
+        console.log('📡 Testing patients endpoint...');
+        const testPatients = await patientsAPI.getAll();
+        console.log('✅ Patients Test:', testPatients.length, 'patients loaded');
+        
         // Additional connection verification
         console.log('🔍 Verifying no localhost or relative URLs are being used...');
         const allEnvVars = Object.keys(import.meta.env).filter(key => key.startsWith('VITE_'));
@@ -306,6 +315,15 @@ const Dashboard = () => {
       console.log('📡 Testing resources endpoint...');
       const testResources = await resourcesAPI.getAll();
       console.log('✅ Manual Test - Resources:', testResources);
+      
+      // Additional endpoint tests for comprehensive coverage
+      console.log('📡 Testing ambulance availability endpoint...');
+      const testAvailability = await ambulanceAPI.getAvailability();
+      console.log('✅ Manual Test - Ambulance Availability:', testAvailability);
+      
+      console.log('📡 Testing patients endpoint...');
+      const testPatients = await patientsAPI.getAll();
+      console.log('✅ Manual Test - Patients:', testPatients.length, 'patients loaded');
       
       toast.success('API connection test completed! Check console for details.');
     } catch (error) {

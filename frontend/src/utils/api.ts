@@ -58,6 +58,15 @@ export const getBaseUrl = async (): Promise<string> => {
   if (explicit) {
     const resolvedUrl = `${explicit.replace(/\/$/, '')}/api`;
     console.log('[getBaseUrl] Resolved URL:', resolvedUrl);
+    
+    // Production safety check - ensure we're using Render backend
+    if (import.meta.env.PROD && !resolvedUrl.includes('wellspring-backend.onrender.com')) {
+      console.error('[getBaseUrl] CRITICAL: Production environment not using Render backend!');
+      console.error('[getBaseUrl] Expected: https://wellspring-backend.onrender.com/api');
+      console.error('[getBaseUrl] Got:', resolvedUrl);
+      throw new Error('Production environment must use Render backend URL');
+    }
+    
     return resolvedUrl;
   }
   
@@ -65,6 +74,7 @@ export const getBaseUrl = async (): Promise<string> => {
   if (import.meta.env.PROD) {
     console.error('[getBaseUrl] CRITICAL: Missing VITE_API_BASE_URL in production!');
     console.error('[getBaseUrl] Production environment detected - no localhost fallback allowed');
+    console.error('[getBaseUrl] Please set VITE_API_BASE_URL=https://wellspring-backend.onrender.com in Netlify environment variables');
     throw new Error('VITE_API_BASE_URL environment variable is required in production');
   }
   
@@ -154,28 +164,64 @@ export const authedFetch = async (
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
+  // Log outgoing request
+  const url = input.toString();
+  console.log('[authedFetch] Outgoing request:', {
+    url,
+    method: rest.method || 'GET',
+    hasToken: !!token,
+    retrying: !!retrying,
+    timestamp: new Date().toISOString()
+  });
+
   let response: Response;
   try {
     response = await fetch(input, { ...rest, headers });
   } catch (err) {
-    console.error("Network error during fetch:", input, err);
+    console.error("[authedFetch] Network error during fetch:", input, err);
     throw err;
   }
 
+  // Log response
+  console.log('[authedFetch] Response received:', {
+    url,
+    status: response.status,
+    statusText: response.statusText,
+    ok: response.ok,
+    timestamp: new Date().toISOString()
+  });
+
   // If unauthorized/forbidden, try once more with forced refresh
   if ((response.status === 401 || response.status === 403) && !retrying) {
-    console.warn(`Received ${response.status}. Retrying once with forced token refresh...`);
+    console.warn(`[authedFetch] Received ${response.status}. Retrying once with forced token refresh...`);
     const freshToken = await getValidIdToken(true);
     const retryHeaders: Record<string, string> = {
       ...(typeof initHeaders === 'object' ? (initHeaders as Record<string, string>) : {}),
     };
     if (freshToken) retryHeaders['Authorization'] = `Bearer ${freshToken}`;
     try {
-      return await fetch(input, { ...rest, headers: retryHeaders, // mark as retrying by passing flag
+      console.log('[authedFetch] Retry request:', {
+        url,
+        method: rest.method || 'GET',
+        hasFreshToken: !!freshToken,
+        timestamp: new Date().toISOString()
+      });
+      
+      const retryResponse = await fetch(input, { ...rest, headers: retryHeaders, // mark as retrying by passing flag
         // @ts-expect-error custom flag not part of RequestInit; only used internally
         retrying: true });
+      
+      console.log('[authedFetch] Retry response:', {
+        url,
+        status: retryResponse.status,
+        statusText: retryResponse.statusText,
+        ok: retryResponse.ok,
+        timestamp: new Date().toISOString()
+      });
+      
+      return retryResponse;
     } catch (err) {
-      console.error("Network error during retry fetch:", input, err);
+      console.error("[authedFetch] Network error during retry fetch:", input, err);
       throw err;
     }
   }

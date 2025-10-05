@@ -62,7 +62,7 @@ export async function allocatePatient(
 ): Promise<void> {
   try {
     const baseApi = await getBaseUrl();
-    const response = await fetch(`${baseApi.replace(/\/$/, '')}/allocate`, {
+    const response = await fetch(`${baseApi}/allocate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

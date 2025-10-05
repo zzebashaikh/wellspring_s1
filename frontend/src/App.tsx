@@ -11,6 +11,23 @@ const queryClient = new QueryClient();
 
 const App = () => {
   useEffect(() => {
+    // Production safety check - ensure we're not using localhost
+    if (import.meta.env.PROD) {
+      const allEnvVars = Object.keys(import.meta.env).filter(key => key.startsWith('VITE_'));
+      const hasLocalhost = allEnvVars.some(key => 
+        import.meta.env[key]?.includes('localhost') || 
+        import.meta.env[key]?.includes('127.0.0.1')
+      );
+      
+      if (hasLocalhost) {
+        console.error('🚨 CRITICAL: Production environment contains localhost URLs!');
+        console.error('🚨 This is a security risk - production should never use localhost');
+        throw new Error('Localhost URLs detected in production environment');
+      }
+      
+      console.log('✅ Production safety check passed - no localhost URLs detected');
+    }
+
     // Comprehensive request interception and logging for Render backend
     console.log('🔧 Setting up request interception for Render backend...');
     
