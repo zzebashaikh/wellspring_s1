@@ -19,7 +19,7 @@ import { db } from "./config";
 import { ReceptionistLogin, AmbulanceDispatch, AmbulanceResource, Patient } from "@/types";
 
 const RECEPTIONIST_LOGINS_COLLECTION = "receptionistLogins";
-const AMBULANCE_DISPATCH_COLLECTION = "ambulanceDispatch";
+const AMBULANCE_DISPATCH_COLLECTION = "ambulanceDispatches";
 const AMBULANCE_RESOURCES_COLLECTION = "ambulanceResources";
 const PATIENTS_COLLECTION = "patients";
 

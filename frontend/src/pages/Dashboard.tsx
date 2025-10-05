@@ -99,23 +99,34 @@ const Dashboard = () => {
   }, [navigate]);
 
   const loadData = async () => {
-    try {
-      setIsLoading(true);
-      const [patientsResponse, resourcesResponse, doctorsResponse] = await Promise.all([
-        patientsAPI.getAll(),
-        resourcesAPI.getAll(),
-        resourcesAPI.getDoctors()
-      ]);
+    setIsLoading(true);
+    const [patientsRes, resourcesRes, doctorsRes] = await Promise.allSettled([
+      patientsAPI.getAll(),
+      resourcesAPI.getAll(),
+      resourcesAPI.getDoctors()
+    ]);
 
-      setPatients(patientsResponse);
-      setResources(resourcesResponse);
-      setDoctors(doctorsResponse);
-    } catch (error) {
-      console.error('Failed to load data:', error);
-      toast.error('Failed to load data from server');
-    } finally {
-      setIsLoading(false);
+    if (patientsRes.status === 'fulfilled' && Array.isArray(patientsRes.value)) {
+      setPatients(patientsRes.value);
+    } else {
+      console.warn('Patients load failed, defaulting to []');
+      setPatients([]);
     }
+
+    if (resourcesRes.status === 'fulfilled' && resourcesRes.value) {
+      setResources(resourcesRes.value);
+    } else {
+      console.warn('Resources load failed, keeping defaults');
+    }
+
+    if (doctorsRes.status === 'fulfilled' && Array.isArray(doctorsRes.value)) {
+      setDoctors(doctorsRes.value);
+    } else {
+      console.warn('Doctors load failed, defaulting to []');
+      setDoctors([]);
+    }
+
+    setIsLoading(false);
   };
 
   const handleLogout = () => {

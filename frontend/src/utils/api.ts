@@ -43,16 +43,15 @@ export interface Resource {
   maintenance?: number;
 }
 
-// Use relative URLs for API calls - Vite proxy will handle routing to backend
-const getBaseUrl = async (): Promise<string> => {
-  // Prefer explicit backend URL if provided
+// Resolve backend base URL. Prefer env; default to http://localhost:3001/api for dev.
+export const getBaseUrl = async (): Promise<string> => {
   const explicit = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL;
   if (explicit) {
     return `${explicit.replace(/\/$/, '')}/api`;
   }
-  // In development, use the proxy
-  if (!import.meta.env.PROD) return '/api';
-  // Fallback for production if not set
+  if (!import.meta.env.PROD) {
+    return 'http://localhost:3001/api';
+  }
   return '/api';
 };
 
@@ -459,21 +458,19 @@ export const resourcesAPI = {
   },
 
   getDoctors: async (): Promise<string[]> => {
-    const BASE_URL = await getBaseUrl();
-    console.log("Getting doctors from:", BASE_URL);
-    const response = await authedFetch(`${BASE_URL}/resources/doctors/list`);
-    
-    console.log("Doctors API response:", response.status, response.statusText);
-    
-    if (!response.ok) {
-      const error = await parseJsonSafe(response);
-      console.error("Doctors API error:", error);
-      throw new Error((error && error.message) || 'Failed to fetch doctors');
+    try {
+      const BASE_URL = await getBaseUrl();
+      const response = await authedFetch(`${BASE_URL}/resources/doctors/list`);
+      if (!response.ok) {
+        const error = await parseJsonSafe(response);
+        throw new Error((error && error.message) || 'Failed to fetch doctors');
+      }
+      const result = await parseJsonSafe(response);
+      return (result && result.data) as string[] || [];
+    } catch (err) {
+      console.warn('Falling back to empty doctors list due to error:', err);
+      return [];
     }
-    
-    const result = await parseJsonSafe(response);
-    console.log("Doctors API result:", result);
-    return (result && result.data) as string[];
   }
 };
 
@@ -498,40 +495,38 @@ export const ambulanceAPI = {
   },
 
   getDispatches: async (limit: number = 50): Promise<AmbulanceDispatch[]> => {
-    const BASE_URL = await getBaseUrl();
-    console.log("Getting ambulance dispatches from:", BASE_URL);
-    const response = await authedFetch(`${BASE_URL}/ambulance/dispatches?limit=${limit}`);
-    
-    console.log("Ambulance dispatches API response:", response.status, response.statusText);
-    
-    if (!response.ok) {
-      const error = await buildApiError(response, 'Failed to fetch ambulance dispatches');
-      console.error("Ambulance dispatches API error:", error);
-      throw error;
+    try {
+      const BASE_URL = await getBaseUrl();
+      const response = await authedFetch(`${BASE_URL}/ambulance/dispatches?limit=${limit}`);
+      if (!response.ok) {
+        const error = await buildApiError(response, 'Failed to fetch ambulance dispatches');
+        throw error;
+      }
+      const result = await parseJsonSafe(response);
+      return (result && result.data) || [];
+    } catch (err) {
+      console.warn('Falling back to empty dispatch list due to error:', err);
+      return [];
     }
-    const result = await parseJsonSafe(response);
-    console.log("Ambulance dispatches API result:", result);
-    return (result && result.data) || [];
   },
 
   getAvailability: async (): Promise<{ total: number; available: number; onTrip: number; maintenance: number }> => {
-    const BASE_URL = await getBaseUrl();
-    console.log("Getting ambulance availability from:", BASE_URL);
-    const response = await authedFetch(`${BASE_URL}/ambulance/availability`);
-    
-    console.log("Ambulance availability API response:", response.status, response.statusText);
-    
-    if (!response.ok) {
-      const error = await buildApiError(response, 'Failed to fetch ambulance availability');
-      console.error("Ambulance availability API error:", error);
-      throw error;
-    }
-    const result = await parseJsonSafe(response);
-    console.log("Ambulance availability API result:", result);
-    if (!result || !result.data) {
+    try {
+      const BASE_URL = await getBaseUrl();
+      const response = await authedFetch(`${BASE_URL}/ambulance/availability`);
+      if (!response.ok) {
+        const error = await buildApiError(response, 'Failed to fetch ambulance availability');
+        throw error;
+      }
+      const result = await parseJsonSafe(response);
+      if (!result || !result.data) {
+        return { total: 0, available: 0, onTrip: 0, maintenance: 0 };
+      }
+      return result.data;
+    } catch (err) {
+      console.warn('Falling back to zeroed ambulance availability due to error:', err);
       return { total: 0, available: 0, onTrip: 0, maintenance: 0 };
     }
-    return result.data;
   },
 
   updateDispatchStatus: async (dispatchId: string, status: 'Available' | 'En Route' | 'Busy'): Promise<void> => {

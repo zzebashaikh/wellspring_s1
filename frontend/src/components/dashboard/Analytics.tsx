@@ -8,19 +8,28 @@ interface AnalyticsProps {
 }
 
 const Analytics = ({ patients, resources }: AnalyticsProps) => {
-  const admittedCount = patients.filter((p) => p.status === "Admitted").length;
-  const waitingCount = patients.filter((p) => p.status === "Waiting").length;
+  const admittedCount = Number.isFinite(patients.filter((p) => p.status === "Admitted").length)
+    ? patients.filter((p) => p.status === "Admitted").length
+    : 0;
+  const waitingCount = Number.isFinite(patients.filter((p) => p.status === "Waiting").length)
+    ? patients.filter((p) => p.status === "Waiting").length
+    : 0;
 
   const patientStatusData = [
     { name: "Admitted", value: admittedCount, color: "hsl(var(--success))" },
     { name: "Waiting", value: waitingCount, color: "hsl(var(--warning))" },
   ];
 
-  const resourceUtilizationData = Object.entries(resources).map(([key, resource]) => ({
-    name: key.charAt(0).toUpperCase() + key.slice(1),
-    utilized: resource.total - resource.available,
-    available: resource.available,
-  }));
+  const resourceUtilizationData = Object.entries(resources).map(([key, resource]: any) => {
+    const total = Number.isFinite(Number(resource?.total)) ? Number(resource.total) : 0;
+    const available = Number.isFinite(Number(resource?.available)) ? Number(resource.available) : 0;
+    const utilized = Math.max(0, total - available);
+    return {
+      name: key.charAt(0).toUpperCase() + key.slice(1),
+      utilized,
+      available,
+    };
+  });
 
   return (
     <div className="grid md:grid-cols-2 gap-8">
@@ -90,6 +99,7 @@ const Analytics = ({ patients, resources }: AnalyticsProps) => {
                 border: "1px solid hsl(var(--border))",
                 borderRadius: "0.75rem",
               }}
+              formatter={(value: any) => [Number.isFinite(Number(value)) ? Number(value) : 0]}
             />
             <Bar dataKey="utilized" stackId="a" fill="hsl(var(--primary))" radius={[0, 0, 8, 8]} />
             <Bar dataKey="available" stackId="a" fill="hsl(var(--secondary))" radius={[8, 8, 0, 0]} />

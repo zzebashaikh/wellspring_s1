@@ -6,12 +6,30 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Ambulance } from "lucide-react";
-import { Patient } from "@/pages/Dashboard";
+import { Patient } from "@/types"; // import type only
 
 interface AmbulanceDispatchProps {
   onDispatch: (patientData: Omit<Patient, "id" | "status"> & { pickupAddress: string }) => boolean;
   available: number;
 }
+
+// Map severity numbers to string priorities
+const severityToPriority = (severity: number): Patient["priority"] => {
+  switch (severity) {
+    case 1:
+      return "low";
+    case 2:
+      return "medium";
+    case 3:
+      return "medium";
+    case 4:
+      return "high";
+    case 5:
+      return "critical";
+    default:
+      return "medium";
+  }
+};
 
 const AmbulanceDispatch = ({ onDispatch, available }: AmbulanceDispatchProps) => {
   const [formData, setFormData] = useState({
@@ -29,12 +47,16 @@ const AmbulanceDispatch = ({ onDispatch, available }: AmbulanceDispatchProps) =>
       return;
     }
 
+    const severityNum = parseInt(formData.severity);
+
     const success = onDispatch({
       name: formData.name,
       age: parseInt(formData.age),
       contact: formData.contact,
-      severity: parseInt(formData.severity),
       pickupAddress: formData.pickupAddress,
+      condition: "Unknown", // default value
+      severity: severityNum,
+      priority: severityToPriority(severityNum), // map to string literal
     });
 
     if (success) {
@@ -63,9 +85,7 @@ const AmbulanceDispatch = ({ onDispatch, available }: AmbulanceDispatchProps) =>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="dispatch-name" className="text-sm font-medium">
-              Patient Name
-            </Label>
+            <Label htmlFor="dispatch-name" className="text-sm font-medium">Patient Name</Label>
             <Input
               id="dispatch-name"
               type="text"
@@ -78,9 +98,7 @@ const AmbulanceDispatch = ({ onDispatch, available }: AmbulanceDispatchProps) =>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="dispatch-age" className="text-sm font-medium">
-              Age
-            </Label>
+            <Label htmlFor="dispatch-age" className="text-sm font-medium">Age</Label>
             <Input
               id="dispatch-age"
               type="number"
@@ -95,9 +113,7 @@ const AmbulanceDispatch = ({ onDispatch, available }: AmbulanceDispatchProps) =>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="dispatch-contact" className="text-sm font-medium">
-              Contact
-            </Label>
+            <Label htmlFor="dispatch-contact" className="text-sm font-medium">Contact</Label>
             <Input
               id="dispatch-contact"
               type="tel"
@@ -110,9 +126,7 @@ const AmbulanceDispatch = ({ onDispatch, available }: AmbulanceDispatchProps) =>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="dispatch-severity" className="text-sm font-medium">
-              Severity Level
-            </Label>
+            <Label htmlFor="dispatch-severity" className="text-sm font-medium">Severity Level</Label>
             <Select
               value={formData.severity}
               onValueChange={(value) => setFormData({ ...formData, severity: value })}
@@ -132,9 +146,7 @@ const AmbulanceDispatch = ({ onDispatch, available }: AmbulanceDispatchProps) =>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="pickup-address" className="text-sm font-medium">
-            Pickup Address
-          </Label>
+          <Label htmlFor="pickup-address" className="text-sm font-medium">Pickup Address</Label>
           <Textarea
             id="pickup-address"
             placeholder="Enter complete pickup address"

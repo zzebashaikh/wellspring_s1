@@ -26,9 +26,26 @@ const app = express(); // <-- must be first
 
 // Firestore is initialized in config/firebase.js; no MongoDB connection is used.
 
-// Middleware
+// Middleware to parse JSON and URL-encoded bodies
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ✅ CORS fix for local development
+const allowedOrigins = ['http://localhost:8081', 'http://localhost:8085', 'http://localhost:8087'];
+// CORS dev fix - allows all localhost origins
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // allow non-browser requests
+    if (/^http:\/\/localhost:\d+$/.test(origin)) return callback(null, true);
+    callback(new Error('CORS not allowed for this origin'));
+  },
+  credentials: true,
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
 
 // Request/response logging middleware
 app.use((req, res, next) => {
@@ -46,10 +63,6 @@ app.use((req, res, next) => {
   });
   next();
 });
-
-// CORS
-app.use(cors({ origin: config.CORS_ORIGIN, credentials: true }));
-app.options('*', cors({ origin: config.CORS_ORIGIN, credentials: true }));
 
 // Routes
 app.use('/api/auth', authRoutes);

@@ -1,6 +1,7 @@
 // firebase/auth.ts
 import { signInWithEmailAndPassword, User } from "firebase/auth";
 import { auth } from "./config";
+import { getBaseUrl } from "@/utils/api";
 import { FirebaseAuthError, FirebaseUser } from "@/types";
 import { recordReceptionistLogin } from "./firestore";
 
@@ -60,8 +61,8 @@ export async function allocatePatient(
   bedNumber: number
 ): Promise<void> {
   try {
-    const backend = (import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
-    const response = await fetch(`${backend}/api/allocate`, {
+    const baseApi = await getBaseUrl();
+    const response = await fetch(`${baseApi.replace(/\/$/, '')}/allocate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -70,13 +71,13 @@ export async function allocatePatient(
       body: JSON.stringify({ patientId, bed: bedNumber })
     });
 
-    const data = await response.json();
-    if (response.ok) {
-      console.log("Allocation successful:", data);
-    } else {
-      console.error("Allocation failed:", data.message);
-      throw new Error(`Allocation failed: ${data.message}`);
+    let data: any = null;
+    try { data = await response.json(); } catch { /* ignore parse errors */ }
+    if (!response.ok) {
+      const message = (data && (data.message || data.error)) || `HTTP ${response.status}`;
+      throw new Error(`Allocation failed: ${message}`);
     }
+    console.log("Allocation successful:", data);
   } catch (err: any) {
     console.error("Error calling backend:", err);
     throw new Error(`Error calling backend: ${err.message}`);
