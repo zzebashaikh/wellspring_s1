@@ -25,6 +25,18 @@ function resolveServiceAccountPath() {
 
 function initializeFirebaseAdmin() {
   try {
+    // Check if we have the JSON credentials as an environment variable (for Render)
+    const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+    
+    if (credentialsJson) {
+      const serviceAccount = JSON.parse(credentialsJson);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+      console.log('🔐 Firebase Admin initialized with JSON credentials from environment');
+      return;
+    }
+
     const serviceAccountPath = resolveServiceAccountPath();
 
     if (serviceAccountPath) {
@@ -43,6 +55,22 @@ function initializeFirebaseAdmin() {
     console.log('🔐 Firebase Admin initialized with application default credentials');
   } catch (error) {
     console.error('❌ Failed to initialize Firebase Admin:', error);
+    
+    // In production, try to initialize without credentials (for demo purposes)
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('⚠️ Firebase initialization failed, trying fallback approach...');
+      try {
+        // This will use the default project credentials
+        admin.initializeApp({
+          projectId: 'wellspring-4c4c0'
+        });
+        console.log('🔐 Firebase Admin initialized with project ID fallback');
+        return;
+      } catch (fallbackError) {
+        console.error('❌ Fallback Firebase initialization also failed:', fallbackError);
+      }
+    }
+    
     throw error;
   }
 }
