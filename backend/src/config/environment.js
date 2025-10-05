@@ -16,6 +16,7 @@ export const config = {
         'http://localhost:8081',    // Current frontend port  
         'http://127.0.0.1:5173',
         'http://127.0.0.1:8081',
-        'http://localhost:8083'     // Additional dev port
+        'http://localhost:8083',   // Additional dev port
+        'https://wellspringhospital.netlify.app'  // Production frontend
       ],
 };

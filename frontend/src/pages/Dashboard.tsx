@@ -9,7 +9,7 @@ import AddPatientForm from "@/components/dashboard/AddPatientForm";
 import AmbulanceDispatch from "@/components/dashboard/AmbulanceDispatch";
 import AmbulanceHistory from "@/components/dashboard/AmbulanceHistory";
 import Analytics from "@/components/dashboard/Analytics";
-import { patientsAPI, resourcesAPI, authAPI, ambulanceAPI, Patient, Resource } from "@/utils/api";
+import { patientsAPI, resourcesAPI, authAPI, ambulanceAPI, Patient, Resource, getBaseUrl } from "@/utils/api";
 import { getAmbulanceAvailability, subscribePatients } from "@/firebase/firestore";
 
 export interface Resources {
@@ -53,6 +53,52 @@ const Dashboard = () => {
     }
 
     loadData();
+
+    // Comprehensive API connection test to verify Render backend connectivity
+    (async () => {
+      try {
+        console.log('🧪 Testing API connection to Render backend...');
+        console.log('📍 Environment variables:', {
+          VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+          VITE_BACKEND_URL: import.meta.env.VITE_BACKEND_URL,
+          VITE_API_URL: import.meta.env.VITE_API_URL,
+          PROD: import.meta.env.PROD,
+          MODE: import.meta.env.MODE
+        });
+        
+        // Verify we're using the correct backend URL
+        const baseUrl = await getBaseUrl();
+        console.log('🔗 Resolved base URL:', baseUrl);
+        
+        if (!baseUrl.includes('wellspring-backend.onrender.com')) {
+          console.warn('⚠️ WARNING: Not using Render backend URL!');
+        } else {
+          console.log('✅ Using correct Render backend URL');
+        }
+        
+        // Test specific endpoints as requested
+        console.log('📡 Testing /api/ambulance/dispatches?limit=1...');
+        const testDispatches = await ambulanceAPI.getDispatches(1);
+        console.log('✅ Ambulance Dispatches Test:', testDispatches);
+        
+        console.log('📡 Testing /api/resources/doctors/list...');
+        const testDoctors = await resourcesAPI.getDoctors();
+        console.log('✅ Doctors List Test:', testDoctors);
+        
+        console.log('🎉 All API connection tests passed! Backend is properly connected to Render.');
+      } catch (error) {
+        console.error('❌ API Connection Test Failed:', error);
+        console.error('Error details:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined
+        });
+        
+        // Show user-friendly error if it's a production environment issue
+        if (error instanceof Error && error.message.includes('VITE_API_BASE_URL environment variable is required')) {
+          console.error('🚨 CRITICAL: Missing environment variable in production!');
+        }
+      }
+    })();
 
     // Ensure ambulance resources exist; if not, initialize
     (async () => {
@@ -202,6 +248,44 @@ const Dashboard = () => {
     }
   };
 
+  // Test API connection function for manual testing
+  const testAPIConnection = async () => {
+    try {
+      console.log('🧪 Manual API Connection Test Started...');
+      console.log('📍 Current environment variables:', {
+        VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+        VITE_BACKEND_URL: import.meta.env.VITE_BACKEND_URL,
+        VITE_API_URL: import.meta.env.VITE_API_URL,
+        PROD: import.meta.env.PROD,
+        MODE: import.meta.env.MODE
+      });
+      
+      // Verify we're using the correct backend URL
+      const baseUrl = await getBaseUrl();
+      console.log('🔗 Resolved base URL:', baseUrl);
+      
+      if (!baseUrl.includes('wellspring-backend.onrender.com')) {
+        console.warn('⚠️ WARNING: Not using Render backend URL!');
+        toast.error('Not using Render backend URL! Check environment variables.');
+        return;
+      }
+      
+      // Test the specific endpoint you requested
+      console.log('📡 Testing /api/ambulance/dispatches?limit=1...');
+      const testDispatches = await ambulanceAPI.getDispatches(1);
+      console.log('✅ Manual Test - Ambulance Dispatches (limit=1):', testDispatches);
+      
+      console.log('📡 Testing /api/resources/doctors/list...');
+      const testDoctors = await resourcesAPI.getDoctors();
+      console.log('✅ Manual Test - Doctors List:', testDoctors);
+      
+      toast.success('API connection test completed! Check console for details.');
+    } catch (error) {
+      console.error('❌ Manual API Connection Test Failed:', error);
+      toast.error(`API test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   const dispatchAmbulance = (patientData: Omit<Patient, "id" | "status"> & { pickupAddress: string }): boolean => {
     if (ambulanceAvailability.available <= 0) {
       toast.error("No ambulances available");
@@ -248,15 +332,25 @@ const Dashboard = () => {
               <p className="text-xs text-muted-foreground">Admin Portal</p>
             </div>
           </div>
-          <Button
-            onClick={handleLogout}
-            variant="ghost"
-            size="sm"
-            className="gap-2 rounded-xl"
-          >
-            <LogOut className="w-4 h-4" />
-            Logout
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={testAPIConnection}
+              variant="outline"
+              size="sm"
+              className="gap-2 rounded-xl"
+            >
+              🧪 Test API
+            </Button>
+            <Button
+              onClick={handleLogout}
+              variant="ghost"
+              size="sm"
+              className="gap-2 rounded-xl"
+            >
+              <LogOut className="w-4 h-4" />
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 

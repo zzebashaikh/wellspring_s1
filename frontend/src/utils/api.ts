@@ -43,16 +43,20 @@ export interface Resource {
   maintenance?: number;
 }
 
-// Resolve backend base URL. Prefer env; default to http://localhost:3001/api for dev.
+// Resolve backend base URL. Prefer env; secure fallback for production.
 export const getBaseUrl = async (): Promise<string> => {
-  const explicit = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL;
+  const explicit = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL;
   if (explicit) {
     return `${explicit.replace(/\/$/, '')}/api`;
   }
-  if (!import.meta.env.PROD) {
-    return 'http://localhost:3001/api';
+  
+  // In production, require explicit environment variable
+  if (import.meta.env.PROD) {
+    throw new Error('VITE_API_BASE_URL environment variable is required in production');
   }
-  return '/api';
+  
+  // Development fallback only
+  return 'http://localhost:3001/api';
 };
 
 // Simple console smoke test to verify token handling and API stability

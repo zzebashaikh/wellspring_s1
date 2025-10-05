@@ -30,13 +30,27 @@ const app = express(); // <-- must be first
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ CORS fix for local development
-const allowedOrigins = ['http://localhost:8081', 'http://localhost:8085', 'http://localhost:8087'];
-// CORS dev fix - allows all localhost origins
+// ✅ CORS configuration for production and development
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // allow non-browser requests
-    if (/^http:\/\/localhost:\d+$/.test(origin)) return callback(null, true);
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in the allowed list
+    if (config.CORS_ORIGIN.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // Allow localhost for development
+    if (/^http:\/\/localhost:\d+$/.test(origin) || /^http:\/\/127\.0\.0\.1:\d+$/.test(origin)) {
+      return callback(null, true);
+    }
+    
+    // Allow Netlify domains
+    if (/^https:\/\/.*\.netlify\.app$/.test(origin)) {
+      return callback(null, true);
+    }
+    
     callback(new Error('CORS not allowed for this origin'));
   },
   credentials: true,
