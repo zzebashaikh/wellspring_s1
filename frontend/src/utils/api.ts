@@ -66,6 +66,7 @@ export const getBaseUrl = async (): Promise<string> => {
   }
   
   // Production fallback - use Render backend if no environment variable is set
+  // Updated: Ensure frontend uses correct backend URL for deployment
   if (import.meta.env.PROD) {
     const prodUrl = 'https://wellspring-backend.onrender.com/api';
     console.log('[getBaseUrl] Production mode - using Render backend:', prodUrl);
