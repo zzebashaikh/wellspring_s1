@@ -1,6 +1,7 @@
 // utils/api.ts
 import { loginReceptionist } from "@/firebase/auth";
 import { getRecentLogins, getReceptionistLogins } from "@/firebase/firestore";
+import { auth } from "@/firebase/config";
 import { 
   AllocationRequest, 
   ApiResponse, 
@@ -55,14 +56,113 @@ const getBaseUrl = async (): Promise<string> => {
   return '/api';
 };
 
+// Simple console smoke test to verify token handling and API stability
+export async function apiSmokeTest() {
+  try {
+    const user = auth.currentUser;
+    const token = user ? await user.getIdToken(false) : null;
+    console.log('[apiSmokeTest] Current user:', user?.uid || 'none');
+    console.log('[apiSmokeTest] Token (first 16):', token ? token.slice(0, 16) + '...' : 'none');
 
-// Helper function to get auth headers
-const getAuthHeaders = (): Record<string, string> => {
-  const token = localStorage.getItem('authToken');
-  return {
-    'Content-Type': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` })
+    const [patients, resources, doctors, dispatches, availability] = await Promise.all([
+      patientsAPI.getAll().catch((e) => ({ error: e?.message || String(e) })),
+      resourcesAPI.getAll().catch((e) => ({ error: e?.message || String(e) })),
+      resourcesAPI.getDoctors().catch((e) => ({ error: e?.message || String(e) })),
+      ambulanceAPI.getDispatches(5).catch((e) => ({ error: e?.message || String(e) })),
+      ambulanceAPI.getAvailability().catch((e) => ({ error: e?.message || String(e) })),
+    ]);
+
+    console.log('[apiSmokeTest] Patients:', patients);
+    console.log('[apiSmokeTest] Resources:', resources);
+    console.log('[apiSmokeTest] Doctors:', doctors);
+    console.log('[apiSmokeTest] Dispatches:', dispatches);
+    console.log('[apiSmokeTest] Ambulance availability:', availability);
+
+    // Force refresh token and try one authedFetch ping to validate retry path
+    const BASE_URL = await getBaseUrl();
+    const fresh = user ? await user.getIdToken(true) : null;
+    console.log('[apiSmokeTest] Fresh token (first 16):', fresh ? fresh.slice(0, 16) + '...' : 'none');
+    const pingResp = await authedFetch(`${BASE_URL}/resources`);
+    console.log('[apiSmokeTest] Ping /resources status:', pingResp.status);
+    return {
+      ok: true,
+      patients,
+      resources,
+      doctors,
+      dispatches,
+      availability,
+      tokenFirst16: token ? token.slice(0, 16) : null,
+      freshFirst16: fresh ? fresh.slice(0, 16) : null,
+    };
+  } catch (e: any) {
+    console.error('[apiSmokeTest] Failed:', e);
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+// Expose test in dev for easy console usage
+if (typeof window !== 'undefined' && !(import.meta as any).env.PROD) {
+  // @ts-ignore
+  window.apiSmokeTest = apiSmokeTest;
+}
+
+// Firebase auth token helpers and authed fetch wrapper
+const getValidIdToken = async (forceRefresh: boolean = false): Promise<string | null> => {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      console.warn("auth.currentUser is null. User might be signed out or anonymous.");
+      return null;
+    }
+    // If forceRefresh is true, always fetch a fresh token
+    const token = await user.getIdToken(forceRefresh);
+    return token;
+  } catch (err) {
+    console.error("Failed to get Firebase ID token:", err);
+    return null;
+  }
+};
+
+export const authedFetch = async (
+  input: RequestInfo | URL,
+  init?: RequestInit & { retrying?: boolean }
+): Promise<Response> => {
+  const { retrying, headers: initHeaders, ...rest } = init || {};
+
+  // Get token (no force) and attach
+  let token = await getValidIdToken(false);
+  const headers: Record<string, string> = {
+    ...(typeof initHeaders === 'object' ? (initHeaders as Record<string, string>) : {}),
   };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  let response: Response;
+  try {
+    response = await fetch(input, { ...rest, headers });
+  } catch (err) {
+    console.error("Network error during fetch:", input, err);
+    throw err;
+  }
+
+  // If unauthorized/forbidden, try once more with forced refresh
+  if ((response.status === 401 || response.status === 403) && !retrying) {
+    console.warn(`Received ${response.status}. Retrying once with forced token refresh...`);
+    const freshToken = await getValidIdToken(true);
+    const retryHeaders: Record<string, string> = {
+      ...(typeof initHeaders === 'object' ? (initHeaders as Record<string, string>) : {}),
+    };
+    if (freshToken) retryHeaders['Authorization'] = `Bearer ${freshToken}`;
+    try {
+      return await fetch(input, { ...rest, headers: retryHeaders, // mark as retrying by passing flag
+        // @ts-expect-error custom flag not part of RequestInit; only used internally
+        retrying: true });
+    } catch (err) {
+      console.error("Network error during retry fetch:", input, err);
+      throw err;
+    }
+  }
+
+  return response;
 };
 
 // Safely parse JSON responses to avoid "Unexpected end of JSON input"
@@ -116,8 +216,9 @@ export const authAPI = {
         const idToken = await loginReceptionist(email, password);
         if (idToken) {
           localStorage.setItem("isAuthenticated", "true");
+          // Storing token is optional; all API calls now fetch a fresh token automatically
           localStorage.setItem("authToken", idToken);
-          console.log("Firebase login successful, token:", idToken);
+          console.log("Firebase login successful; token will be fetched dynamically per request.");
         }
         return idToken;
       } catch (firebaseError) {
@@ -188,16 +289,15 @@ export const patientsAPI = {
   getAll: async (): Promise<Patient[]> => {
     try {
       const BASE_URL = await getBaseUrl();
-      const response = await fetch(`${BASE_URL}/patients`, {
-        headers: getAuthHeaders(),
-      });
+      const response = await authedFetch(`${BASE_URL}/patients`);
       
       if (!response.ok) {
-        const error: any = await response.json();
-        throw new Error(error.message || 'Failed to fetch patients');
+        const error: any = await parseJsonSafe(response);
+        throw new Error(error?.message || 'Failed to fetch patients');
       }
       
-      const result: ApiResponse<Patient[]> = await response.json();
+      const result: ApiResponse<Patient[]> | null = await parseJsonSafe(response);
+      if (!result || !result.data) throw new Error('Unexpected server response for patients');
       return result.data!;
     } catch (error) {
       console.error('Error fetching patients:', error);
@@ -207,81 +307,78 @@ export const patientsAPI = {
 
   getById: async (id: string): Promise<Patient> => {
     const BASE_URL = await getBaseUrl();
-    const response = await fetch(`${BASE_URL}/patients/${id}`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await authedFetch(`${BASE_URL}/patients/${id}`);
     
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch patient');
+      const error = await parseJsonSafe(response);
+      throw new Error((error && error.message) || 'Failed to fetch patient');
     }
     
-    const result = await response.json();
-    return result.data;
+    const result = await parseJsonSafe(response);
+    return result?.data;
   },
 
   create: async (patientData: Omit<Patient, 'id' | 'status'>): Promise<Patient> => {
     const BASE_URL = await getBaseUrl();
-    const response = await fetch(`${BASE_URL}/patients`, {
+    const response = await authedFetch(`${BASE_URL}/patients`, {
       method: 'POST',
-      headers: getAuthHeaders(),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patientData),
     });
     
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to create patient');
+      const error = await parseJsonSafe(response);
+      throw new Error((error && error.message) || 'Failed to create patient');
     }
     
-    const result = await response.json();
-    return result.data;
+    const result = await parseJsonSafe(response);
+    return result?.data;
   },
 
   update: async (id: string, patientData: Partial<Patient>): Promise<Patient> => {
     const BASE_URL = await getBaseUrl();
-    const response = await fetch(`${BASE_URL}/patients/${id}`, {
+    const response = await authedFetch(`${BASE_URL}/patients/${id}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patientData),
     });
     
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to update patient');
+      const error = await parseJsonSafe(response);
+      throw new Error((error && error.message) || 'Failed to update patient');
     }
     
-    const result = await response.json();
-    return result.data;
+    const result = await parseJsonSafe(response);
+    return result?.data;
   },
 
   delete: async (id: string): Promise<void> => {
     const BASE_URL = await getBaseUrl();
-    const response = await fetch(`${BASE_URL}/patients/${id}`, {
+    const response = await authedFetch(`${BASE_URL}/patients/${id}`, {
       method: 'DELETE',
-      headers: getAuthHeaders(),
     });
     
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to delete patient');
+      const error = await parseJsonSafe(response);
+      throw new Error((error && error.message) || 'Failed to delete patient');
     }
   },
 
   allocateResource: async (id: string, allocatedResource: string): Promise<Patient> => {
     const BASE_URL = await getBaseUrl();
-    const response = await fetch(`${BASE_URL}/patients/${id}/allocate`, {
+    const response = await authedFetch(`${BASE_URL}/patients/${id}/allocate`, {
       method: 'POST',
-      headers: getAuthHeaders(),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ allocatedResource }),
     });
     
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to allocate resource');
+      const error = await parseJsonSafe(response);
+      throw new Error((error && error.message) || 'Failed to allocate resource');
     }
     
-    const result = await response.json();
-    return result.data;
+    const result = await parseJsonSafe(response);
+    return result?.data;
   }
 };
 
@@ -290,101 +387,93 @@ export const patientsAPI = {
 export const resourcesAPI = {
   getAll: async (): Promise<any> => {
     const BASE_URL = await getBaseUrl();
-    const response = await fetch(`${BASE_URL}/resources`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await authedFetch(`${BASE_URL}/resources`);
     
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch resources');
+      const error = await parseJsonSafe(response);
+      throw new Error((error && error.message) || 'Failed to fetch resources');
     }
     
-    const result = await response.json();
-    return result.data;
+    const result = await parseJsonSafe(response);
+    return result?.data;
   },
 
   getByType: async (resourceType: string): Promise<Resource> => {
     const BASE_URL = await getBaseUrl();
-    const response = await fetch(`${BASE_URL}/resources/${resourceType}`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await authedFetch(`${BASE_URL}/resources/${resourceType}`);
     
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch resource');
+      const error = await parseJsonSafe(response);
+      throw new Error((error && error.message) || 'Failed to fetch resource');
     }
     
-    const result = await response.json();
-    return result.data;
+    const result = await parseJsonSafe(response);
+    return result?.data;
   },
 
   update: async (resourceType: string, data: Partial<Resource>): Promise<Resource> => {
     const BASE_URL = await getBaseUrl();
-    const response = await fetch(`${BASE_URL}/resources/${resourceType}`, {
+    const response = await authedFetch(`${BASE_URL}/resources/${resourceType}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to update resource');
+      const error = await parseJsonSafe(response);
+      throw new Error((error && error.message) || 'Failed to update resource');
     }
     
-    const result = await response.json();
-    return result.data;
+    const result = await parseJsonSafe(response);
+    return result?.data;
   },
 
   allocate: async (resourceType: string): Promise<Resource> => {
     const BASE_URL = await getBaseUrl();
-    const response = await fetch(`${BASE_URL}/resources/${resourceType}/allocate`, {
+    const response = await authedFetch(`${BASE_URL}/resources/${resourceType}/allocate`, {
       method: 'POST',
-      headers: getAuthHeaders(),
     });
     
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to allocate resource');
+      const error = await parseJsonSafe(response);
+      throw new Error((error && error.message) || 'Failed to allocate resource');
     }
     
-    const result = await response.json();
-    return result.data;
+    const result = await parseJsonSafe(response);
+    return result?.data;
   },
 
   release: async (resourceType: string): Promise<Resource> => {
     const BASE_URL = await getBaseUrl();
-    const response = await fetch(`${BASE_URL}/resources/${resourceType}/release`, {
+    const response = await authedFetch(`${BASE_URL}/resources/${resourceType}/release`, {
       method: 'POST',
-      headers: getAuthHeaders(),
     });
     
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to release resource');
+      const error = await parseJsonSafe(response);
+      throw new Error((error && error.message) || 'Failed to release resource');
     }
     
-    const result = await response.json();
-    return result.data;
+    const result = await parseJsonSafe(response);
+    return result?.data;
   },
 
   getDoctors: async (): Promise<string[]> => {
     const BASE_URL = await getBaseUrl();
     console.log("Getting doctors from:", BASE_URL);
-    const response = await fetch(`${BASE_URL}/resources/doctors/list`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await authedFetch(`${BASE_URL}/resources/doctors/list`);
     
     console.log("Doctors API response:", response.status, response.statusText);
     
     if (!response.ok) {
-      const error = await response.json();
+      const error = await parseJsonSafe(response);
       console.error("Doctors API error:", error);
-      throw new Error(error.message || 'Failed to fetch doctors');
+      throw new Error((error && error.message) || 'Failed to fetch doctors');
     }
     
-    const result = await response.json();
+    const result = await parseJsonSafe(response);
     console.log("Doctors API result:", result);
-    return result.data;
+    return (result && result.data) as string[];
   }
 };
 
@@ -392,9 +481,9 @@ export const resourcesAPI = {
 export const ambulanceAPI = {
   createDispatch: async (dispatchData: AmbulanceDispatchInput): Promise<AmbulanceDispatch> => {
     const BASE_URL = await getBaseUrl();
-    const response = await fetch(`${BASE_URL}/ambulance/dispatch`, {
+    const response = await authedFetch(`${BASE_URL}/ambulance/dispatch`, {
       method: 'POST',
-      headers: getAuthHeaders(),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(dispatchData),
     });
     
@@ -411,9 +500,7 @@ export const ambulanceAPI = {
   getDispatches: async (limit: number = 50): Promise<AmbulanceDispatch[]> => {
     const BASE_URL = await getBaseUrl();
     console.log("Getting ambulance dispatches from:", BASE_URL);
-    const response = await fetch(`${BASE_URL}/ambulance/dispatches?limit=${limit}`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await authedFetch(`${BASE_URL}/ambulance/dispatches?limit=${limit}`);
     
     console.log("Ambulance dispatches API response:", response.status, response.statusText);
     
@@ -430,9 +517,7 @@ export const ambulanceAPI = {
   getAvailability: async (): Promise<{ total: number; available: number; onTrip: number; maintenance: number }> => {
     const BASE_URL = await getBaseUrl();
     console.log("Getting ambulance availability from:", BASE_URL);
-    const response = await fetch(`${BASE_URL}/ambulance/availability`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await authedFetch(`${BASE_URL}/ambulance/availability`);
     
     console.log("Ambulance availability API response:", response.status, response.statusText);
     
@@ -451,9 +536,9 @@ export const ambulanceAPI = {
 
   updateDispatchStatus: async (dispatchId: string, status: 'Available' | 'En Route' | 'Busy'): Promise<void> => {
     const BASE_URL = await getBaseUrl();
-    const response = await fetch(`${BASE_URL}/ambulance/dispatch/${dispatchId}/status`, {
+    const response = await authedFetch(`${BASE_URL}/ambulance/dispatch/${dispatchId}/status`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     });
     
@@ -464,9 +549,8 @@ export const ambulanceAPI = {
 
   initializeResources: async (): Promise<void> => {
     const BASE_URL = await getBaseUrl();
-    const response = await fetch(`${BASE_URL}/ambulance/initialize`, {
+    const response = await authedFetch(`${BASE_URL}/ambulance/initialize`, {
       method: 'POST',
-      headers: getAuthHeaders(),
     });
     
     if (!response.ok) {

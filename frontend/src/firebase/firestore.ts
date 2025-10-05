@@ -1,3 +1,4 @@
+export {};
 // firebase/firestore.ts
 import { 
   collection, 
@@ -52,31 +53,6 @@ export async function recordReceptionistLogin(
     console.error("Error recording login:", error);
     throw new Error(`Failed to record login: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-}
-
-/**
- * Subscribe to ambulance dispatch history in real-time
- */
-export function subscribeAmbulanceDispatches(
-  limitCount: number,
-  callback: (dispatches: AmbulanceDispatch[]) => void
-): () => void {
-  const q = query(
-    collection(db, AMBULANCE_DISPATCH_COLLECTION),
-    orderBy("dispatchTime", "desc"),
-    limit(limitCount)
-  );
-
-  return onSnapshot(q, (querySnapshot) => {
-    const list: AmbulanceDispatch[] = [];
-    querySnapshot.forEach((d) => {
-      const data = d.data() as any;
-      list.push({ id: d.id, ...data } as AmbulanceDispatch);
-    });
-    callback(list);
-  }, (error) => {
-    console.error('Error listening to ambulance dispatches:', error);
-  });
 }
 
 /**
@@ -148,111 +124,40 @@ export async function getReceptionistLogins(uid: string, limitCount: number = 20
 }
 
 /**
- * Create a new ambulance dispatch record
+ * Subscribe to ambulance dispatch history in real-time
  */
-export async function createAmbulanceDispatch(
-  dispatchData: AmbulanceDispatchInput,
-  receptionistUid?: string
-): Promise<string> {
-  try {
-    console.log("Creating ambulance dispatch:", dispatchData);
-    
-    // First, find an available ambulance
-    const availableAmbulance = await findAvailableAmbulance();
-    if (!availableAmbulance) {
-      throw new Error("No ambulances available for dispatch");
-    }
+export function subscribeAmbulanceDispatches(
+  limitCount: number,
+  callback: (dispatches: AmbulanceDispatch[]) => void
+): () => void {
+  const q = query(
+    collection(db, AMBULANCE_DISPATCH_COLLECTION),
+    orderBy('dispatchTime', 'desc'),
+    limit(limitCount)
+  );
 
-    // Create dispatch data
-    const dispatchRecord: Omit<AmbulanceDispatch, 'id'> = {
-      ...dispatchData,
-      assignedAmbulanceID: availableAmbulance.id,
-      dispatchTime: serverTimestamp() as Timestamp,
-      ambulanceStatus: 'En Route',
-      dispatchedBy: receptionistUid,
-      createdAt: serverTimestamp() as Timestamp,
-      updatedAt: serverTimestamp() as Timestamp,
-    };
+  return onSnapshot(q, (querySnapshot) => {
+    const list: AmbulanceDispatch[] = [];
+    querySnapshot.forEach((d) => {
+      const data = d.data() as any;
+      list.push({ id: d.id, ...data } as AmbulanceDispatch);
+    });
 
-    // Use transaction to ensure atomicity
-    const dispatchId = await runTransaction(db, async (transaction) => {
-      // Create dispatch record
-      const dispatchRef = doc(collection(db, AMBULANCE_DISPATCH_COLLECTION));
-      transaction.set(dispatchRef, dispatchRecord);
-
-      // Update ambulance status
-      const ambulanceRef = doc(db, AMBULANCE_RESOURCES_COLLECTION, availableAmbulance.id);
-      transaction.update(ambulanceRef, {
-        status: 'En Route',
-        currentDispatchId: dispatchRef.id,
-        lastUpdated: serverTimestamp(),
+    // Auto-move patients to queue when dispatch becomes Available and not yet moved
+    (list as any[])
+      .filter((item) => item.ambulanceStatus === 'Available' && !item.movedToQueue)
+      .forEach(async (item) => {
+        try {
+          await moveDispatchPatientToQueue(item.id as string, item as any);
+        } catch (e) {
+          console.error('Failed to move dispatch patient to queue:', (item as any)?.id, e);
+        }
       });
 
-      return dispatchRef.id;
-    });
-
-    console.log("Ambulance dispatch created successfully with ID:", dispatchId);
-    return dispatchId;
-  } catch (error) {
-    console.error("Error creating ambulance dispatch:", error);
-    throw new Error(`Failed to create dispatch: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
-}
-
-/**
- * Find an available ambulance
- */
-export async function findAvailableAmbulance(): Promise<AmbulanceResource | null> {
-  try {
-    const q = query(
-      collection(db, AMBULANCE_RESOURCES_COLLECTION),
-      where("status", "==", "Available"),
-      limit(1)
-    );
-
-    const querySnapshot = await getDocs(q);
-    if (querySnapshot.empty) {
-      return null;
-    }
-
-    const doc = querySnapshot.docs[0];
-    return {
-      id: doc.id,
-      ...doc.data()
-    } as AmbulanceResource;
-  } catch (error) {
-    console.error("Error finding available ambulance:", error);
-    throw new Error(`Failed to find available ambulance: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
-}
-
-/**
- * Get all ambulance dispatch records
- */
-export async function getAmbulanceDispatches(limitCount: number = 50): Promise<AmbulanceDispatch[]> {
-  try {
-    const q = query(
-      collection(db, AMBULANCE_DISPATCH_COLLECTION),
-      orderBy("dispatchTime", "desc"),
-      limit(limitCount)
-    );
-
-    const querySnapshot = await getDocs(q);
-    const dispatches: AmbulanceDispatch[] = [];
-
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
-      dispatches.push({
-        id: doc.id,
-        ...data
-      } as AmbulanceDispatch);
-    });
-
-    return dispatches;
-  } catch (error) {
-    console.error("Error fetching ambulance dispatches:", error);
-    throw new Error(`Failed to fetch dispatches: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
+    callback(list);
+  }, (error) => {
+    console.error('Error listening to ambulance dispatches:', error);
+  });
 }
 
 /**
@@ -286,12 +191,71 @@ export async function updateAmbulanceDispatchStatus(
             lastUpdated: serverTimestamp(),
           });
         }
+
+        // Also ensure patient is placed into queue once ambulance reaches hospital
+        try {
+          await moveDispatchPatientToQueue(dispatchId, dispatchData as any);
+        } catch (e) {
+          console.error('Failed to move patient to queue after status update:', dispatchId, e);
+        }
       }
     }
   } catch (error) {
     console.error("Error updating ambulance dispatch status:", error);
     throw new Error(`Failed to update dispatch status: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
+}
+
+/**
+ * Move the patient from a dispatch record into the patients queue if not already moved.
+ * Marks the dispatch with movedToQueue and patientDocId to avoid duplicates.
+ */
+export async function moveDispatchPatientToQueue(
+  dispatchId: string,
+  dispatchData?: Partial<AmbulanceDispatch> & { [key: string]: any }
+): Promise<string> {
+  // Read latest dispatch if data not provided
+  if (!dispatchData) {
+    const dispatchDocSnap = await getDocs(query(
+      collection(db, AMBULANCE_DISPATCH_COLLECTION),
+      where("__name__", "==", dispatchId)
+    ));
+    if (dispatchDocSnap.empty) throw new Error('Dispatch not found');
+    dispatchData = dispatchDocSnap.docs[0].data() as any;
+  }
+
+  if ((dispatchData as any).movedToQueue) {
+    return (dispatchData as any).patientDocId || '';
+  }
+
+  const patientsRef = collection(db, PATIENTS_COLLECTION);
+  const patientPayload = {
+    name: dispatchData.patientName || 'Unknown',
+    age: dispatchData.age || 0,
+    contact: dispatchData.contactNumber || '',
+    severity: dispatchData.severityLevel || 3,
+    status: 'Waiting',
+    admissionDateTime: serverTimestamp(),
+    source: 'ambulance',
+  } as const;
+
+  // Create patient and mark dispatch in a transaction for atomicity
+  const patientId = await runTransaction(db, async (transaction) => {
+    const newPatientRef = doc(patientsRef);
+    transaction.set(newPatientRef, patientPayload as any);
+
+    const dispatchRef = doc(db, AMBULANCE_DISPATCH_COLLECTION, dispatchId);
+    transaction.update(dispatchRef, {
+      movedToQueue: true,
+      patientDocId: newPatientRef.id,
+      updatedAt: serverTimestamp(),
+    });
+
+    return newPatientRef.id;
+  });
+
+  console.log('Moved dispatch patient to queue:', { dispatchId, patientId });
+  return patientId;
 }
 
 /**
