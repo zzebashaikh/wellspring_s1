@@ -80,17 +80,22 @@ app.use((req, res, next) => {
   next();
 });
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'Backend is healthy',
+    timestamp: new Date().toISOString(),
+    environment: config.NODE_ENV
+  });
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/allocate', allocateRoutes);
 app.use('/api/ambulance', ambulanceRoutes);
-
-// Health check endpoint
-app.get('/api/health', asyncHandler(async (req, res) => {
-  res.json({ status: 'ok' });
-}));
 
 // Serve frontend in production
 if (config.NODE_ENV === 'production') {

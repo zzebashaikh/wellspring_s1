@@ -6,7 +6,7 @@ export const authenticateToken = async (req, res, next) => {
   try {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-    console.log(`🔒 Auth check: ${req.method} ${req.originalUrl} | token:${token ? 'present' : 'none'}`);
+    console.log(`🔒 Auth check: ${req.method} ${req.originalUrl} | token:${token ? 'present' : 'none'} | NODE_ENV:${config.NODE_ENV}`);
 
     // Development mode: allow requests with no token or demo token prefixes
     if (config.NODE_ENV === 'development') {
