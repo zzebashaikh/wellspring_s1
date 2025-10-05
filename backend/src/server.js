@@ -1,10 +1,19 @@
 import express from 'express';
 import cors from 'cors';
 import { config } from './config/environment.js';
-import { connectDB } from './config/database.js';
 import initializeFirestoreData from './scripts/initializeData.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+// Simple structured logger
+const log = {
+  info: (message, meta = {}) => console.log(JSON.stringify({ level: 'info', message, ...meta })),
+  warn: (message, meta = {}) => console.warn(JSON.stringify({ level: 'warn', message, ...meta })),
+  error: (message, meta = {}) => console.error(JSON.stringify({ level: 'error', message, ...meta })),
+};
+
+// Async route wrapper
+const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -15,12 +24,28 @@ import ambulanceRoutes from './routes/ambulance.js';
 
 const app = express(); // <-- must be first
 
-// Connect to MongoDB
-connectDB();
+// Firestore is initialized in config/firebase.js; no MongoDB connection is used.
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Request/response logging middleware
+app.use((req, res, next) => {
+  const startTimeMs = Date.now();
+  const authHeader = req.headers['authorization'];
+  const hasToken = Boolean(authHeader);
+  const tokenType = hasToken && authHeader.split(' ')[0];
+  log.info('request', { method: req.method, url: req.originalUrl, token: hasToken ? tokenType : 'none', ip: req.ip });
+  if (Object.keys(req.body || {}).length > 0) {
+    log.info('request_body', { body: req.body });
+  }
+  res.on('finish', () => {
+    const durationMs = Date.now() - startTimeMs;
+    log.info('response', { method: req.method, url: req.originalUrl, statusCode: res.statusCode, durationMs });
+  });
+  next();
+});
 
 // CORS
 app.use(cors({ origin: config.CORS_ORIGIN, credentials: true }));
@@ -34,14 +59,9 @@ app.use('/api/allocate', allocateRoutes);
 app.use('/api/ambulance', ambulanceRoutes);
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    success: true,
-    status: 'OK', 
-    message: 'WellSpring Hospital API is running',
-    timestamp: new Date().toISOString()
-  });
-});
+app.get('/api/health', asyncHandler(async (req, res) => {
+  res.json({ status: 'ok' });
+}));
 
 // Serve frontend in production
 if (config.NODE_ENV === 'production') {
@@ -60,7 +80,7 @@ if (config.NODE_ENV === 'production') {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Server error:', err.stack);
+  log.error('server_error', { stack: err.stack, message: err.message });
   res.status(500).json({ 
     success: false,
     message: 'Something went wrong!',
@@ -75,12 +95,12 @@ app.use('/api/*', (req, res) => {
 
 // Process error handling
 process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
+  log.error('uncaught_exception', { message: err.message, stack: err.stack });
   process.exit(1);
 });
 
 process.on('unhandledRejection', (err) => {
-  console.error('Unhandled Rejection:', err);
+  log.error('unhandled_rejection', { message: err && err.message, stack: err && err.stack });
   process.exit(1);
 });
 
@@ -91,7 +111,12 @@ const startServer = () => {
   const server = app.listen(PORT, async () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🌍 Environment: ${config.NODE_ENV}`);
-    console.log(`🔗 CORS Origin: ${config.CORS_ORIGIN.join(', ')}`);
+    try {
+      const corsOrigins = Array.isArray(config.CORS_ORIGIN) ? config.CORS_ORIGIN.join(', ') : String(config.CORS_ORIGIN);
+      console.log(`🔗 CORS Origin: ${corsOrigins}`);
+    } catch {
+      console.log('🔗 CORS Origin: (unavailable)');
+    }
     console.log(`🏥 WellSpring Hospital API is ready!`);
     
     // Initialize Firestore data

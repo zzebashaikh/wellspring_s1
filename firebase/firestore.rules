@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Development rules: require authentication, allow reads/writes on key collections
+    function isAuthed() {
+      return request.auth != null;
+    }
+
+    // Patients collection
+    match /patients/{patientId} {
+      allow read, write: if isAuthed();
+    }
+
+    // Ambulance dispatch history
+    match /ambulanceDispatch/{dispatchId} {
+      allow read, write: if isAuthed();
+    }
+
+    // Ambulance resource pool
+    match /ambulanceResources/{resourceId} {
+      allow read, write: if isAuthed();
+    }
+
+    // Receptionist login tracking
+    match /receptionistLogins/{loginId} {
+      allow read, write: if isAuthed();
+    }
+
+    // Resource documents and hospital meta
+    match /resources/{docId} {
+      allow read, write: if isAuthed();
+    }
+
+    // Allocations
+    match /allocations/{allocId} {
+      allow read, write: if isAuthed();
+    }
+
+    // Default: deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+

@@ -60,7 +60,8 @@ export async function allocatePatient(
   bedNumber: number
 ): Promise<void> {
   try {
-    const response = await fetch(`${import.meta.env.VITE_BASE_URL || 'http://localhost:3001/api'}/allocate`, {
+    const backend = (import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
+    const response = await fetch(`${backend}/api/allocate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

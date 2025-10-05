@@ -5,8 +5,9 @@ import 'dotenv/config';
 export const config = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   PORT: process.env.PORT || 3001,
-  MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/wellspring_hospital',
   JWT_SECRET: process.env.JWT_SECRET || 'wellspring_hospital_jwt_secret_2024',
+  // Allow demo auth tokens outside development if explicitly enabled
+  DEMO_AUTH_ALLOWED: (process.env.DEMO_AUTH_ALLOWED || 'false').toLowerCase() === 'true',
   // Dynamic CORS origins - parse from env or use defaults
   CORS_ORIGIN: process.env.CORS_ORIGIN 
     ? process.env.CORS_ORIGIN.split(',')

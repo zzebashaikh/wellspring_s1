@@ -6,6 +6,7 @@ export const authenticateToken = async (req, res, next) => {
   try {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    console.log(`🔒 Auth check: ${req.method} ${req.originalUrl} | token:${token ? 'present' : 'none'}`);
 
     // Development mode: allow requests with no token or demo token prefixes
     if (config.NODE_ENV === 'development') {
@@ -28,8 +29,8 @@ export const authenticateToken = async (req, res, next) => {
       });
     }
 
-    // Check if it's a demo token first (before Firebase verification)
-    if (config.NODE_ENV === 'development' && token.startsWith('demo-token')) {
+    // Check if it's a demo token first (before Firebase verification). In production, only allow if DEMO_AUTH_ALLOWED=true
+    if ((config.NODE_ENV === 'development' || config.DEMO_AUTH_ALLOWED) && token.startsWith('demo-token')) {
       req.user = {
         uid: 'demo-user',
         email: 'receptionist@wellspring.com',

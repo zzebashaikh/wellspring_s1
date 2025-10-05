@@ -2,6 +2,7 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { db } from '../config/firebase.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
 const router = express.Router();
 const resourcesCollection = db.collection('resources');
@@ -25,7 +26,6 @@ const initializeResources = async () => {
           'Surgery': { total: 30, available: 15, cleaning: 2 },
         },
       };
-      
       await resourcesCollection.doc('hospital').set(defaultResources);
       console.log('Default resources initialized in Firestore');
     }
@@ -38,246 +38,151 @@ const initializeResources = async () => {
 initializeResources();
 
 // Get all resources
-router.get('/', authenticateToken, async (req, res) => {
-  try {
-    const snapshot = await resourcesCollection.get();
-    
-    if (snapshot.empty) {
-      return res.status(404).json({ success: false, message: 'Resources not found' });
-    }
-    
-    // Find the main hospital resources document
-    const hospitalDoc = snapshot.docs.find(doc => doc.id === 'hospital');
-    if (!hospitalDoc) {
-      return res.status(404).json({ success: false, message: 'Hospital resources not found' });
-    }
-    
-    // Return the hospital resources directly
-    res.json({
-      success: true,
-      data: hospitalDoc.data()
-    });
-  } catch (error) {
-    console.error('Get resources error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+router.get('/', authenticateToken, asyncHandler(async (req, res) => {
+  const snapshot = await resourcesCollection.get();
+  if (snapshot.empty) {
+    return res.status(404).json({ success: false, message: 'Resources not found' });
   }
-});
+  // Find the main hospital resources document
+  const hospitalDoc = snapshot.docs.find(doc => doc.id === 'hospital');
+  if (!hospitalDoc) {
+    return res.status(404).json({ success: false, message: 'Hospital resources not found' });
+  }
+  // Return the hospital resources directly
+  res.json({ success: true, data: hospitalDoc.data() });
+}));
 
 // Get doctors list (place this BEFORE parameterized routes)
-router.get('/doctors/list', authenticateToken, async (req, res) => {
-  try {
-    // Try Firestore collection 'doctors' with docs having a 'name' field
-    const doctorsSnapshot = await db.collection('doctors').get();
-    let doctors = [];
-    if (!doctorsSnapshot.empty) {
-      doctors = doctorsSnapshot.docs.map(d => d.data().name).filter(Boolean);
-    }
-
-    // Fallback to static seed if Firestore empty
-    if (doctors.length === 0) {
-      doctors = [
-        'Dr. A. Mehta (Cardiology)',
-        'Dr. R. Iyer (Neurology)',
-        'Dr. S. Nair (Pediatrics)',
-        'Dr. P. Desai (Orthopedics)',
-        'Dr. K. Shah (General Medicine)',
-        'Dr. V. Kulkarni (Surgery)',
-        'Dr. M. Gupta (Oncology)',
-        'Dr. S. Chatterjee (Pulmonology)',
-      ];
-    }
-
-    res.json({ success: true, data: doctors });
-  } catch (error) {
-    console.error('Get doctors error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+router.get('/doctors/list', authenticateToken, asyncHandler(async (req, res) => {
+  // Try Firestore collection 'doctors' with docs having a 'name' field
+  const doctorsSnapshot = await db.collection('doctors').get();
+  let doctors = [];
+  if (!doctorsSnapshot.empty) {
+    doctors = doctorsSnapshot.docs.map(d => d.data().name).filter(Boolean);
   }
-});
+  // Fallback to static seed if Firestore empty
+  if (doctors.length === 0) {
+    doctors = [
+      'Dr. A. Mehta (Cardiology)',
+      'Dr. R. Iyer (Neurology)',
+      'Dr. S. Nair (Pediatrics)',
+      'Dr. P. Desai (Orthopedics)',
+      'Dr. K. Shah (General Medicine)',
+      'Dr. V. Kulkarni (Surgery)',
+      'Dr. M. Gupta (Oncology)',
+      'Dr. S. Chatterjee (Pulmonology)',
+    ];
+  }
+  res.json({ success: true, data: doctors });
+}));
 
 // Get specific resource
-router.get('/:resourceType', authenticateToken, async (req, res) => {
-  try {
-    const { resourceType } = req.params;
-    const doc = await resourcesCollection.doc(resourceType).get();
-    
-    if (!doc.exists) {
-      return res.status(404).json({ success: false, message: 'Resource type not found' });
-    }
-    
-    res.json({
-      success: true,
-      data: doc.data()
-    });
-  } catch (error) {
-    console.error('Get resource error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+router.get('/:resourceType', authenticateToken, asyncHandler(async (req, res) => {
+  const { resourceType } = req.params;
+  const doc = await resourcesCollection.doc(resourceType).get();
+  if (!doc.exists) {
+    return res.status(404).json({ success: false, message: 'Resource type not found' });
   }
-});
+  res.json({ success: true, data: doc.data() });
+}));
 
 // Update resource availability
-router.put('/:resourceType', authenticateToken, async (req, res) => {
-  try {
-    const { resourceType } = req.params;
-    const updateData = req.body;
-    
-    const docRef = resourcesCollection.doc(resourceType);
-    const doc = await docRef.get();
-    
-    if (!doc.exists) {
-      return res.status(404).json({ success: false, message: 'Resource type not found' });
-    }
-    
-    const updatedResource = { ...doc.data(), ...updateData };
-    await docRef.update(updatedResource);
-    
-    res.json({
-      success: true,
-      message: `${resourceType} updated successfully`,
-      data: updatedResource
-    });
-  } catch (error) {
-    console.error('Update resource error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+router.put('/:resourceType', authenticateToken, asyncHandler(async (req, res) => {
+  const { resourceType } = req.params;
+  const updateData = req.body;
+  const docRef = resourcesCollection.doc(resourceType);
+  const doc = await docRef.get();
+  if (!doc.exists) {
+    return res.status(404).json({ success: false, message: 'Resource type not found' });
   }
-});
+  const updatedResource = { ...doc.data(), ...updateData };
+  await docRef.update(updatedResource);
+  res.json({ success: true, message: `${resourceType} updated successfully`, data: updatedResource });
+}));
 
 // Allocate resource (decrease available count)
-router.post('/:resourceType/allocate', authenticateToken, async (req, res) => {
-  try {
-    const { resourceType } = req.params;
-    
-    // Handle special cases for hospital resources stored under 'hospital' document
-    if (['beds', 'icus', 'ventilators', 'oxygen', 'nurses', 'ambulances'].includes(resourceType)) {
-      const docRef = resourcesCollection.doc('hospital');
-      const doc = await docRef.get();
-      
-      if (!doc.exists) {
-        return res.status(404).json({ success: false, message: 'Hospital resources not found' });
-      }
-      
-      const hospitalData = doc.data();
-      const resourceData = hospitalData[resourceType];
-      
-      if (!resourceData || resourceData.available <= 0) {
-        return res.status(400).json({ success: false, message: `No ${resourceType} available` });
-      }
-      
-      // Update the specific resource availability
-      const updatedHospitalData = {
-        ...hospitalData,
-        [resourceType]: {
-          ...resourceData,
-          available: resourceData.available - 1
-        }
-      };
-      
-      await docRef.update(updatedHospitalData);
-      
-      res.json({
-        success: true,
-        message: `${resourceType} allocated successfully`,
-        data: updatedHospitalData
-      });
-    } else {
-      // Handle individual resource documents
-      const docRef = resourcesCollection.doc(resourceType);
-      const doc = await docRef.get();
-      
-      if (!doc.exists) {
-        return res.status(404).json({ success: false, message: 'Resource type not found' });
-      }
-      
-      const resource = doc.data();
-      
-      if (resource.available <= 0) {
-        return res.status(400).json({ success: false, message: `No ${resourceType} available` });
-      }
-      
-      // Decrease available count
-      const updatedResource = {
-        ...resource,
-        available: resource.available - 1
-      };
-      
-      await docRef.update(updatedResource);
-      
-      res.json({
-        success: true,
-        message: `${resourceType} allocated successfully`,
-        data: updatedResource
-      });
+router.post('/:resourceType/allocate', authenticateToken, asyncHandler(async (req, res) => {
+  const { resourceType } = req.params;
+  // Handle special cases for hospital resources stored under 'hospital' document
+  if (['beds', 'icus', 'ventilators', 'oxygen', 'nurses', 'ambulances'].includes(resourceType)) {
+    const docRef = resourcesCollection.doc('hospital');
+    const doc = await docRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({ success: false, message: 'Hospital resources not found' });
     }
-  } catch (error) {
-    console.error('Allocate resource error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    const hospitalData = doc.data();
+    const resourceData = hospitalData[resourceType];
+    if (!resourceData || resourceData.available <= 0) {
+      return res.status(400).json({ success: false, message: `No ${resourceType} available` });
+    }
+    // Update the specific resource availability
+    const updatedHospitalData = {
+      ...hospitalData,
+      [resourceType]: {
+        ...resourceData,
+        available: resourceData.available - 1
+      }
+    };
+    await docRef.update(updatedHospitalData);
+    return res.json({ success: true, message: `${resourceType} allocated successfully`, data: updatedHospitalData });
   }
-});
+  // Handle individual resource documents
+  const docRef = resourcesCollection.doc(resourceType);
+  const doc = await docRef.get();
+  if (!doc.exists) {
+    return res.status(404).json({ success: false, message: 'Resource type not found' });
+  }
+  const resource = doc.data();
+  if (resource.available <= 0) {
+    return res.status(400).json({ success: false, message: `No ${resourceType} available` });
+  }
+  // Decrease available count
+  const updatedResource = { ...resource, available: resource.available - 1 };
+  await docRef.update(updatedResource);
+  res.json({ success: true, message: `${resourceType} allocated successfully`, data: updatedResource });
+}));
 
 // Release resource (increase available count)
-router.post('/:resourceType/release', authenticateToken, async (req, res) => {
-  try {
-    const { resourceType } = req.params;
-
-    // Handle hospital-level resources stored under 'hospital'
-    if (['beds', 'icus', 'ventilators', 'oxygen', 'nurses', 'ambulances'].includes(resourceType)) {
-      const docRef = resourcesCollection.doc('hospital');
-      const doc = await docRef.get();
-
-      if (!doc.exists) {
-        return res.status(404).json({ success: false, message: 'Hospital resources not found' });
-      }
-
-      const hospitalData = doc.data();
-      const resourceData = hospitalData[resourceType];
-
-      if (!resourceData) {
-        return res.status(404).json({ success: false, message: 'Resource type not found' });
-      }
-
-      if (resourceData.available >= resourceData.total) {
-        return res.status(400).json({ success: false, message: `All ${resourceType} are already available` });
-      }
-
-      const updatedHospitalData = {
-        ...hospitalData,
-        [resourceType]: {
-          ...resourceData,
-          available: resourceData.available + 1,
-        },
-      };
-
-      await docRef.update(updatedHospitalData);
-
-      return res.json({
-        success: true,
-        message: `${resourceType} released successfully`,
-        data: updatedHospitalData,
-      });
-    }
-
-    // Fallback for individual resource documents
-    const docRef = resourcesCollection.doc(resourceType);
+router.post('/:resourceType/release', authenticateToken, asyncHandler(async (req, res) => {
+  const { resourceType } = req.params;
+  // Handle hospital-level resources stored under 'hospital'
+  if (['beds', 'icus', 'ventilators', 'oxygen', 'nurses', 'ambulances'].includes(resourceType)) {
+    const docRef = resourcesCollection.doc('hospital');
     const doc = await docRef.get();
-
     if (!doc.exists) {
+      return res.status(404).json({ success: false, message: 'Hospital resources not found' });
+    }
+    const hospitalData = doc.data();
+    const resourceData = hospitalData[resourceType];
+    if (!resourceData) {
       return res.status(404).json({ success: false, message: 'Resource type not found' });
     }
-
-    const resource = doc.data();
-
-    if (resource.available >= resource.total) {
+    if (resourceData.available >= resourceData.total) {
       return res.status(400).json({ success: false, message: `All ${resourceType} are already available` });
     }
-
-    const updatedResource = { ...resource, available: resource.available + 1 };
-    await docRef.update(updatedResource);
-
-    res.json({ success: true, message: `${resourceType} released successfully`, data: updatedResource });
-  } catch (error) {
-    console.error('Release resource error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    const updatedHospitalData = {
+      ...hospitalData,
+      [resourceType]: {
+        ...resourceData,
+        available: resourceData.available + 1,
+      },
+    };
+    await docRef.update(updatedHospitalData);
+    return res.json({ success: true, message: `${resourceType} released successfully`, data: updatedHospitalData });
   }
-});
-
+  // Fallback for individual resource documents
+  const docRef = resourcesCollection.doc(resourceType);
+  const doc = await docRef.get();
+  if (!doc.exists) {
+    return res.status(404).json({ success: false, message: 'Resource type not found' });
+  }
+  const resource = doc.data();
+  if (resource.available >= resource.total) {
+    return res.status(400).json({ success: false, message: `All ${resourceType} are already available` });
+  }
+  const updatedResource = { ...resource, available: resource.available + 1 };
+  await docRef.update(updatedResource);
+  res.json({ success: true, message: `${resourceType} released successfully`, data: updatedResource });
+}));
 
 export default router;

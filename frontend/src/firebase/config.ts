@@ -1,6 +1,6 @@
 // frontend/src/firebase/config.ts
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, signInAnonymously } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import type { Auth } from "firebase/auth";
 import type { Firestore } from "firebase/firestore";
@@ -24,4 +24,17 @@ const db: Firestore = getFirestore(app);
 // Exports
 export { auth, db };
 export default app;
+
+// Ensure an authenticated context for Firestore rules (development convenience)
+// This signs in anonymously if no user is currently signed in.
+try {
+  if (!auth.currentUser) {
+    // Fire-and-forget; listeners will work after auth resolves
+    signInAnonymously(auth).catch(() => {
+      // Non-fatal in dev; backend API still functions
+    });
+  }
+} catch {
+  // ignore
+}
 

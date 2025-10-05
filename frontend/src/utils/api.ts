@@ -44,11 +44,14 @@ export interface Resource {
 
 // Use relative URLs for API calls - Vite proxy will handle routing to backend
 const getBaseUrl = async (): Promise<string> => {
-  // In production, use the deployed backend URL
-  if (import.meta.env.PROD) {
-    return import.meta.env.VITE_API_URL || 'https://your-backend-url.herokuapp.com/api';
+  // Prefer explicit backend URL if provided
+  const explicit = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL;
+  if (explicit) {
+    return `${explicit.replace(/\/$/, '')}/api`;
   }
   // In development, use the proxy
+  if (!import.meta.env.PROD) return '/api';
+  // Fallback for production if not set
   return '/api';
 };
 

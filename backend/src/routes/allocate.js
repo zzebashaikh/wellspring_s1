@@ -2,11 +2,11 @@ import express from 'express';
 import admin from 'firebase-admin';
 import { db } from '../config/firebase.js';
 import { authenticateToken } from '../middleware/auth.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
 const router = express.Router();
 
-router.post('/', authenticateToken, async (req, res) => {
-  try {
+router.post('/', authenticateToken, asyncHandler(async (req, res) => {
     // req.user is set by authenticateToken (supports demo tokens in development)
 
     const { patientId, bed } = req.body;
@@ -25,11 +25,7 @@ router.post('/', authenticateToken, async (req, res) => {
     const allocationRef = await db.collection('allocations').add(allocationData);
 
     res.status(201).json({ message: 'Patient allocated successfully', allocation: { id: allocationRef.id, ...allocationData } });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Internal server error', error: err.message });
-  }
-});
+}));
 
 export default router;
 
