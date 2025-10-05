@@ -19,6 +19,7 @@ export const config = {
         'http://localhost:8083',   // Additional dev port
         'https://wellspringhospital.netlify.app',  // Production frontend
         'https://wellspring-hospital.netlify.app', // Alternative production domain
-        'https://wellspring.netlify.app' // Another possible domain
+        'https://wellspring.netlify.app', // Another possible domain
+        'https://wellspringhospitalbkc.netlify.app' // Actual production domain
       ],
 };
