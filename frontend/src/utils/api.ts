@@ -56,7 +56,11 @@ export const getBaseUrl = async (): Promise<string> => {
   });
   
   if (explicit) {
-    const resolvedUrl = `${explicit.replace(/\/$/, '')}/api`;
+    // Check if the URL already includes /api to avoid double /api paths
+    let resolvedUrl = explicit.replace(/\/$/, '');
+    if (!resolvedUrl.includes('/api')) {
+      resolvedUrl = `${resolvedUrl}/api`;
+    }
     console.log('[getBaseUrl] Resolved URL:', resolvedUrl);
     
     // Production safety check - ensure we're using Render backend
@@ -142,6 +146,14 @@ const getValidIdToken = async (forceRefresh: boolean = false): Promise<string | 
       console.warn("auth.currentUser is null. User might be signed out or anonymous.");
       return null;
     }
+    
+    // Handle anonymous users (they can still get tokens)
+    if (user.isAnonymous) {
+      console.log("User is anonymous, getting anonymous token");
+      const token = await user.getIdToken(forceRefresh);
+      return token;
+    }
+    
     // If forceRefresh is true, always fetch a fresh token
     const token = await user.getIdToken(forceRefresh);
     return token;
@@ -299,6 +311,26 @@ export const authAPI = {
     } catch (error) {
       console.error("Login error:", error);
       throw error;
+    }
+  },
+
+  // Auto-login with existing receptionist for production deployment
+  autoLoginReceptionist: async (): Promise<string | null> => {
+    try {
+      const receptionistEmail = "receptionist@wellspring.com";
+      const receptionistPassword = "demo123";
+      
+      const idToken = await loginReceptionist(receptionistEmail, receptionistPassword);
+      if (idToken) {
+        localStorage.setItem("isAuthenticated", "true");
+        localStorage.setItem("authToken", idToken);
+        console.log("✅ Auto-login with receptionist successful");
+        return idToken;
+      }
+      return null;
+    } catch (error) {
+      console.warn("⚠️ Auto-login with receptionist failed:", error);
+      return null;
     }
   },
 

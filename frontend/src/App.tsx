@@ -6,11 +6,73 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { authAPI } from "./utils/api";
+import { signInWithEmailAndPassword, signInAnonymously } from "firebase/auth";
+import { auth } from "./firebase/config";
 const queryClient = new QueryClient();
 
 const App = () => {
+  const [isAuthenticating, setIsAuthenticating] = useState(true);
+
   useEffect(() => {
+    // Auto-login with existing receptionist for production deployment
+    // This ensures Firebase authentication works with Firestore rules
+    const initializeAuth = async () => {
+      try {
+        console.log('🔐 Initializing authentication...');
+        
+        // Check if user is already authenticated
+        if (auth.currentUser) {
+          console.log('✅ User already authenticated:', auth.currentUser.email);
+          setIsAuthenticating(false);
+          return;
+        }
+
+        // In production, auto-login with receptionist credentials
+        if (import.meta.env.PROD) {
+          console.log('🚀 Production environment detected - attempting auto-login with receptionist');
+          
+          try {
+            const userCredential = await signInWithEmailAndPassword(
+              auth, 
+              "receptionist@wellspring.com", 
+              "demo123"
+            );
+            
+            console.log('✅ Auto-login successful for receptionist:', userCredential.user.email);
+            
+            // Set localStorage for consistency with existing auth system
+            const idToken = await userCredential.user.getIdToken();
+            localStorage.setItem("isAuthenticated", "true");
+            localStorage.setItem("authToken", idToken);
+            
+          } catch (error) {
+            console.warn('⚠️ Receptionist auto-login failed, trying anonymous:', error);
+            
+            // Fallback to anonymous authentication
+            try {
+              await signInAnonymously(auth);
+              console.log('✅ Anonymous authentication successful');
+              localStorage.setItem("isAuthenticated", "true");
+              localStorage.setItem("authToken", "anonymous");
+            } catch (anonError) {
+              console.error('❌ Anonymous authentication also failed:', anonError);
+            }
+          }
+        } else {
+          console.log('🛠️ Development environment - no auto-login');
+        }
+        
+      } catch (error) {
+        console.error('❌ Authentication initialization failed:', error);
+      } finally {
+        setIsAuthenticating(false);
+      }
+    };
+
+    initializeAuth();
+
     // Production safety check - ensure we're not using localhost
     if (import.meta.env.PROD) {
       const allEnvVars = Object.keys(import.meta.env).filter(key => key.startsWith('VITE_'));
@@ -80,6 +142,18 @@ const App = () => {
     
     console.log('✅ Request interception setup complete');
   }, []);
+
+  // Show loading screen while authenticating
+  if (isAuthenticating) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Initializing WellSpring Hospital System...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>

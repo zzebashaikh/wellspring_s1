@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 
 // Initialize Firebase Admin
-const serviceAccountPath = path.join(process.cwd(), 'src/service-account.json');
+const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
 const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
 
 admin.initializeApp({
@@ -13,6 +13,11 @@ admin.initializeApp({
 
 // Receptionist data - customize these as needed
 const receptionists = [
+  {
+    email: 'receptionist@wellspring.com',
+    password: 'demo123',
+    displayName: 'Demo Receptionist'
+  },
   {
     email: 'pooja@wellspring.com',
     password: 'wellspring123',
