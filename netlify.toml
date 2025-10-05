@@ -11,3 +11,13 @@
 
 [build.environment]
   NODE_VERSION = "18"
+  VITE_API_BASE_URL = "https://wellspring-backend.onrender.com"
+  VITE_BACKEND_URL = "https://wellspring-backend.onrender.com"
+  VITE_API_URL = "https://wellspring-backend.onrender.com"
+  VITE_FIREBASE_API_KEY = "AIzaSyA22HCWpmjkcTwO4v8x8s5HW98oGv46Sac"
+  VITE_FIREBASE_AUTH_DOMAIN = "wellspring-4c4c0.firebaseapp.com"
+  VITE_FIREBASE_PROJECT_ID = "wellspring-4c4c0"
+  VITE_FIREBASE_STORAGE_BUCKET = "wellspring-4c4c0.firebasestorage.app"
+  VITE_FIREBASE_MESSAGING_SENDER_ID = "165557430369"
+  VITE_FIREBASE_APP_ID = "1:165557430369:web:df9024423b18e38a5e2220"
+  VITE_FIREBASE_MEASUREMENT_ID = "G-SBXKCKR9S9"
