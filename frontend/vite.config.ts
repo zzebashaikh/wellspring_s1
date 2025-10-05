@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => {
   const backendUrl = env.VITE_API_BASE_URL || env.VITE_BACKEND_URL || env.VITE_API_URL || "http://localhost:3001";
 
   return {
+    base: '/',
     server: {
       host: "::",
       port: 8081,
