@@ -44,6 +44,11 @@ export interface Resource {
 
 // Use relative URLs for API calls - Vite proxy will handle routing to backend
 const getBaseUrl = async (): Promise<string> => {
+  // In production, use the deployed backend URL
+  if (import.meta.env.PROD) {
+    return import.meta.env.VITE_API_URL || 'https://your-backend-url.herokuapp.com/api';
+  }
+  // In development, use the proxy
   return '/api';
 };
 
@@ -99,6 +104,7 @@ export const authAPI = {
         const mockToken = "demo-token-" + Date.now();
         localStorage.setItem("isAuthenticated", "true");
         localStorage.setItem("authToken", mockToken);
+        console.log("Demo login successful, token:", mockToken);
         return mockToken;
       }
       
@@ -108,6 +114,7 @@ export const authAPI = {
         if (idToken) {
           localStorage.setItem("isAuthenticated", "true");
           localStorage.setItem("authToken", idToken);
+          console.log("Firebase login successful, token:", idToken);
         }
         return idToken;
       } catch (firebaseError) {
@@ -116,11 +123,13 @@ export const authAPI = {
           const mockToken = "demo-token-" + Date.now();
           localStorage.setItem("isAuthenticated", "true");
           localStorage.setItem("authToken", mockToken);
+          console.log("Fallback demo login successful, token:", mockToken);
           return mockToken;
         }
         throw firebaseError;
       }
     } catch (error) {
+      console.error("Login error:", error);
       throw error;
     }
   },
@@ -357,16 +366,21 @@ export const resourcesAPI = {
 
   getDoctors: async (): Promise<string[]> => {
     const BASE_URL = await getBaseUrl();
+    console.log("Getting doctors from:", BASE_URL);
     const response = await fetch(`${BASE_URL}/resources/doctors/list`, {
       headers: getAuthHeaders(),
     });
     
+    console.log("Doctors API response:", response.status, response.statusText);
+    
     if (!response.ok) {
       const error = await response.json();
+      console.error("Doctors API error:", error);
       throw new Error(error.message || 'Failed to fetch doctors');
     }
     
     const result = await response.json();
+    console.log("Doctors API result:", result);
     return result.data;
   }
 };
@@ -393,27 +407,39 @@ export const ambulanceAPI = {
 
   getDispatches: async (limit: number = 50): Promise<AmbulanceDispatch[]> => {
     const BASE_URL = await getBaseUrl();
+    console.log("Getting ambulance dispatches from:", BASE_URL);
     const response = await fetch(`${BASE_URL}/ambulance/dispatches?limit=${limit}`, {
       headers: getAuthHeaders(),
     });
     
+    console.log("Ambulance dispatches API response:", response.status, response.statusText);
+    
     if (!response.ok) {
-      throw await buildApiError(response, 'Failed to fetch ambulance dispatches');
+      const error = await buildApiError(response, 'Failed to fetch ambulance dispatches');
+      console.error("Ambulance dispatches API error:", error);
+      throw error;
     }
     const result = await parseJsonSafe(response);
+    console.log("Ambulance dispatches API result:", result);
     return (result && result.data) || [];
   },
 
   getAvailability: async (): Promise<{ total: number; available: number; onTrip: number; maintenance: number }> => {
     const BASE_URL = await getBaseUrl();
+    console.log("Getting ambulance availability from:", BASE_URL);
     const response = await fetch(`${BASE_URL}/ambulance/availability`, {
       headers: getAuthHeaders(),
     });
     
+    console.log("Ambulance availability API response:", response.status, response.statusText);
+    
     if (!response.ok) {
-      throw await buildApiError(response, 'Failed to fetch ambulance availability');
+      const error = await buildApiError(response, 'Failed to fetch ambulance availability');
+      console.error("Ambulance availability API error:", error);
+      throw error;
     }
     const result = await parseJsonSafe(response);
+    console.log("Ambulance availability API result:", result);
     if (!result || !result.data) {
       return { total: 0, available: 0, onTrip: 0, maintenance: 0 };
     }
