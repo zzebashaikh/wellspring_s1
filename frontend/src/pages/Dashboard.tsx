@@ -72,6 +72,8 @@ const Dashboard = () => {
         
         if (!baseUrl.includes('wellspring-backend.onrender.com')) {
           console.warn('⚠️ WARNING: Not using Render backend URL!');
+          console.warn('⚠️ Expected: https://wellspring-backend.onrender.com/api');
+          console.warn('⚠️ Got:', baseUrl);
         } else {
           console.log('✅ Using correct Render backend URL');
         }
@@ -85,7 +87,22 @@ const Dashboard = () => {
         const testDoctors = await resourcesAPI.getDoctors();
         console.log('✅ Doctors List Test:', testDoctors);
         
+        // Additional connection verification
+        console.log('🔍 Verifying no localhost or relative URLs are being used...');
+        const allEnvVars = Object.keys(import.meta.env).filter(key => key.startsWith('VITE_'));
+        const hasLocalhost = allEnvVars.some(key => 
+          import.meta.env[key]?.includes('localhost') || 
+          import.meta.env[key]?.includes('127.0.0.1')
+        );
+        
+        if (hasLocalhost && import.meta.env.PROD) {
+          console.error('🚨 CRITICAL: Found localhost URLs in production environment!');
+        } else {
+          console.log('✅ No localhost URLs detected in production environment');
+        }
+        
         console.log('🎉 All API connection tests passed! Backend is properly connected to Render.');
+        console.log('📊 Production verification complete - all API calls will go to:', baseUrl);
       } catch (error) {
         console.error('❌ API Connection Test Failed:', error);
         console.error('Error details:', {
@@ -96,6 +113,7 @@ const Dashboard = () => {
         // Show user-friendly error if it's a production environment issue
         if (error instanceof Error && error.message.includes('VITE_API_BASE_URL environment variable is required')) {
           console.error('🚨 CRITICAL: Missing environment variable in production!');
+          console.error('🚨 Please set VITE_API_BASE_URL=https://wellspring-backend.onrender.com in Netlify environment variables');
         }
       }
     })();
